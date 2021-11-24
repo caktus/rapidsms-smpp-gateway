@@ -3,12 +3,19 @@ from django.db import models
 
 
 class MOMessage(models.Model):
+    STATUS_CHOICES = (
+        ("new", "New"),
+        ("processing", "Processing"),
+        ("done", "Done"),
+        ("error", "Error"),
+    )
+
     create_time = models.DateTimeField()
     modify_time = models.DateTimeField()
     channel = models.CharField(max_length=32)
     short_message = models.BinaryField()
     params = JSONField()
-    status = models.CharField(max_length=32)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
 
     class Meta:
         managed = False
