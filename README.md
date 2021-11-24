@@ -20,7 +20,7 @@ Now, you will need to install the required dependencies for
 rapidsms-smpp-gateway and be sure that the current tests are passing on your
 machine:
 
-```shell`
+```shell
 # install poetry
 brew install pipx
 pipx install poetry
