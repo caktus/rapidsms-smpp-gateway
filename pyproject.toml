@@ -1,0 +1,45 @@
+[tool.poetry]
+name = "smpp_gateway"
+version = "0.1.0"
+description = ""
+authors = ["Colin Copeland <copelco@caktusgroup.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/caktus/rapidsms-smpp-gateway"
+
+packages = [
+    { include = "smpp_gateway", from = "src" }
+]
+
+include = [
+    { path = "tests", format = "sdist" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+RapidSMS = "~1.1"
+smpplib = "~2.2"
+psycopg2 = "~2.9"
+
+[tool.poetry.dev-dependencies]
+pytest = "~6.2"
+pre-commit = "~2.15"
+black = "21.11b1"
+python-semantic-release = "~7.22"
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "setuptools"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+target_version = ['py39']
+
+[tool.isort]
+py_version = 36
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+use_parentheses = true
+line_length = 100
+lines_between_types = 1
+src_paths = ["src", "tests"]

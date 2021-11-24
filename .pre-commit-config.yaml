@@ -1,0 +1,29 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/psf/black
+    rev: 21.8b0
+    hooks:
+      - id: black
+        language_version: python3
+        # Note: black configuration resides in pyproject.toml, but for some reason
+        # the 'exclude' is ignored when used with pre-commit, so we re-define
+        # the excluded files here.
+        exclude: (^.git|^.*cache.*|conf/|env/|virtualenv/)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.6.4
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--filter-files"]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: debug-statements
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: flake8
+        language_version: python3
