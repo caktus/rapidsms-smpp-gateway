@@ -1,4 +1,5 @@
 from django.contrib import admin
+
 from smpp_gateway.models import MOMessage
 
 

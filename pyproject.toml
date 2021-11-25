@@ -16,7 +16,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 RapidSMS = "~1.1"
 smpplib = "~2.2"
 psycopg2 = "~2.8"
