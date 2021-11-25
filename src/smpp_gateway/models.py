@@ -17,9 +17,5 @@ class MOMessage(models.Model):
     params = JSONField()
     status = models.CharField(max_length=32, choices=STATUS_CHOICES)
 
-    class Meta:
-        managed = False
-        db_table = "mo_sms"
-
     def __str__(self):
         return f"{self.params['short_message']} ({self.id})"
