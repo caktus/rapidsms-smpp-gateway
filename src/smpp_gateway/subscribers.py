@@ -52,12 +52,12 @@ def listen_mo_messages(channel):
 
 def get_mt_messages(channel, limit):
     with transaction.atomic():
-        smses = list(
-            MTMessage.objects.filter(status="new").select_for_update(skip_locked=True)[
-                :limit
-            ]
+        smses = (
+            MTMessage.objects.filter(status="new")
+            .select_for_update(skip_locked=True)
+            .values("id", "short_message", "params")[:limit]
         )
         if smses:
-            pks = [sms.pk for sms in smses]
+            pks = [sms["pk"] for sms in smses]
             MTMessage.objects.filter(pk__in=pks).update(status="processing")
     return smses

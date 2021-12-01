@@ -140,11 +140,16 @@ def smpplib_main_loop(client, system_id, password):
 
 def send_mt_messages(client, channel, notify):
     smses = get_mt_messages(channel, limit=100)
-    for sms in smses:
-        smpplib_send_message(client, sms.short_message, **sms.params)
+    while smses:
+        for sms in smses:
+            smpplib_send_message(client, sms["short_message"], **sms["params"])
+        smses = get_mt_messages(channel, limit=100)
 
 
 def listen_mt_messages(client, channel):
+    # Send any queued messages on startup
+    send_mt_messages(client, channel, None)
+    # Listen for more messages to send
     pg_listen(channel, functools.partial(send_mt_messages, client, channel))
 
 

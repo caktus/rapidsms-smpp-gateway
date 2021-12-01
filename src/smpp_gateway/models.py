@@ -1,5 +1,5 @@
 from django.contrib.postgres.fields import JSONField
-from django.db import models
+from django.db import connection, models
 
 
 class MOMessage(models.Model):
@@ -37,6 +37,12 @@ class MTMessage(models.Model):
     short_message = models.TextField()
     params = JSONField()
     status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.status == "new":
+            with connection.cursor() as curs:
+                curs.execute(f"NOTIFY {self.channel}")
 
     def __str__(self):
         return f"{self.short_message} ({self.id})"
