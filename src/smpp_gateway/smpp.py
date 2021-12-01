@@ -16,6 +16,7 @@ from django.db import connection as db_conn
 from psycopg2.extras import Json
 
 from smpp_gateway.client import ThreadSafeClient
+from smpp_gateway.subscribers import get_mt_messages, pg_listen
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def decoded_params(pdu):
     return {key: maybe_decode(getattr(pdu, key)) for key in pdu.params.keys()}
 
 
-def send_message(client, message, **kwargs):
+def smpplib_send_message(client, message, **kwargs):
     # Two parts, UCS2, SMS with UDH
     parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
     for short_message in parts:
@@ -80,7 +81,7 @@ def send_test_replies(client, **kwargs):
         return
     REPLY_COUNTS[destination_addr] += 1
     for message in TEST_MESSAGES.values():
-        send_message(client, message, **kwargs)
+        smpplib_send_message(client, message, **kwargs)
 
 
 def message_received_handler(smsc_name, system_id, submit_sm_params, pdu):
@@ -126,7 +127,7 @@ def get_smpplib_client(host, port):
 
 def send_test_bulksms(client, source_addr, count):
     for x in range(count):
-        send_message(
+        smpplib_send_message(
             client, f"Test {x}", source_addr=source_addr, destination_addr="99999"
         )
 
@@ -135,6 +136,16 @@ def smpplib_main_loop(client, system_id, password):
     client.connect()
     client.bind_transceiver(system_id=system_id, password=password)
     client.listen()
+
+
+def send_mt_messages(client, channel, notify):
+    smses = get_mt_messages(channel, limit=100)
+    for sms in smses:
+        smpplib_send_message(client, sms.short_message, **sms.params)
+
+
+def listen_mt_messages(client, channel):
+    pg_listen(channel, functools.partial(send_mt_messages, client, channel))
 
 
 def start_smpp_client(options):
@@ -149,10 +160,20 @@ def start_smpp_client(options):
     )
     client.set_error_pdu_handler(functools.partial(error_pdu_handler, client))
     if options["send_bulksms"]:
-        t = Thread(
+        t_bulk = Thread(
             target=functools.partial(
                 send_test_bulksms, client, options["system_id"], options["send_bulksms"]
             )
         )
-        t.start()
+        t_bulk.start()
+    t_mt = Thread(
+        target=functools.partial(
+            # FIXME: replace last arg with client_id once merged
+            listen_mt_messages,
+            client,
+            f"{options['smsc_name']}_{options['system_id']}",
+        )
+    )
+    # FIXME: The whole program should die if this thread dies, otherwise no SMS will be sent...
+    t_mt.start()
     smpplib_main_loop(client, options["system_id"], options["password"])
