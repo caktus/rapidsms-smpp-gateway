@@ -21,8 +21,9 @@ def handle_mo_message(notify):
         if sms is not None:
             MOMessage.objects.filter(pk=sms.pk).update(status="processing")
     if sms is not None:
+        backend_name = sms.channel.split("_")[0]
         connections = lookup_connections(
-            backend="sms_gateway", identities=[sms.params["source_addr"]]
+            backend=backend_name, identities=[sms.params["source_addr"]]
         )
         for conn in connections:
             receive(sms.params["short_message"], conn)
