@@ -1,51 +1,35 @@
 # rapidsms-smpp-gateway
 
-TBD
+A [RapidSMS](https://rapidsms.readthedocs.io/en/latest/) SMPP gateway.
 
 
-## Contributing
+## Management commands
 
+### `smpp_client`
 
-### Local development
-
-You will first need to clone the repository using git and place yourself in its
-directory:
+Start an SMPP client instance:
 
 ```shell
-git clone git@github.com:caktus/rapidsms-smpp-gateway.git
-cd rapidsms-smpp-gateway/
+python manage.py smpp_client smppsim
 ```
 
-Now, you will need to install the required dependencies for
-rapidsms-smpp-gateway and be sure that the current tests are passing on your
-machine:
+Example configuration using environment variables:
 
 ```shell
-# install poetry
-brew install pipx
-pipx install poetry
-# then install requirements within activated venv
-poetry install
-```
-
-To make sure that you don't accidentally commit code that does not follow the
-coding style, you can install a pre-commit hook that will check that everything
-is in order:
-
-```
-pre-commit install
+export PGDATABASE=libya_elections
+export DATABASE_URL=postgresql://localhost/$PGDATABASE
+export SMPPLIB_HOST=localhost
+export SMPPLIB_PORT=2775
+export SMPPLIB_SYSTEM_ID=smppclient1
+export SMPPLIB_PASSWORD=password
+export SMPPLIB_SUBMIT_SM_PARAMS='{"foo": "bar"}'
 ```
 
 
-### Tests
+### `listen_mo_messages`
+
+Listen for mobile-originated (MO) messages:
 
 ```shell
-pytest
-```
-
-
-### Install an editable version in another project
-
-```shell
-pip install -e ../rapidsms-smpp-gateway/
+python manage.py listen_mo_messages --channel new_mo_msg
 ```
