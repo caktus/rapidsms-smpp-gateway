@@ -5,6 +5,41 @@ import socket
 import smpplib
 
 
+class PgSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
+    """
+    smpplib sequence generator that uses a Postgres sequence to persist
+    sequence numbers across restarts and client instances. See:
+    https://www.postgresql.org/docs/10/sql-createsequence.html
+    """
+
+    def __init__(self, conn, name):
+        self.conn = conn
+        self.sequence_name = f"smpp_gateway_sequence_{name}"
+        with conn.cursor() as curs:
+            curs.execute(
+                f"""
+                CREATE SEQUENCE IF NOT EXISTS {self.sequence_name}
+                    MINVALUE {self.MIN_SEQUENCE}
+                    MAXVALUE {self.MAX_SEQUENCE}
+                    CYCLE
+                """
+            )
+
+    def _fetchone(self, query):
+        with self.conn.cursor() as curs:
+            curs.execute(query)
+            return curs.fetchone()[0]
+
+    @property
+    def sequence(self):
+        "Current (last) value of the sequence."
+        return self._fetchone(f"SELECT last_value from {self.sequence_name}")
+
+    def next_sequence(self):
+        "Increments and returns the next value of the sequence."
+        return self._fetchone(f"SELECT nextval('{self.sequence_name}')")
+
+
 class ThreadSafeClient(smpplib.client.Client):
     """
     Thread-safe smpplib Client, adapted from:

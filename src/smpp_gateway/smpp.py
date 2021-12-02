@@ -15,7 +15,7 @@ import smpplib.gsm
 from django.db import connection as db_conn
 from psycopg2.extras import Json
 
-from smpp_gateway.client import ThreadSafeClient
+from smpp_gateway.client import PgSequenceGenerator, ThreadSafeClient
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +83,11 @@ def send_test_replies(client, **kwargs):
         send_message(client, message, **kwargs)
 
 
-def message_received_handler(smsc_name, system_id, submit_sm_params, pdu):
+def message_received_handler(client_id, system_id, submit_sm_params, pdu):
     mo_params = decoded_params(pdu)
     with db_conn.cursor() as cursor:
         # channel, short_message, params
-        args = (f"{smsc_name}_{system_id}", pdu.short_message, Json(mo_params))
+        args = (client_id, pdu.short_message, Json(mo_params))
         cursor.execute(INSERT_MO_SMS_SQL, args)
         cursor.execute("NOTIFY new_mo_msg;")
     if getattr(pdu, "receipted_message_id") is not None:
@@ -113,8 +113,11 @@ def error_pdu_handler(client, pdu):
     )
 
 
-def get_smpplib_client(host, port):
-    client = ThreadSafeClient(host, port, allow_unknown_opt_params=True)
+def get_smpplib_client(client_id, host, port):
+    sequence_generator = PgSequenceGenerator(db_conn, client_id)
+    client = ThreadSafeClient(
+        host, port, allow_unknown_opt_params=True, sequence_generator=sequence_generator
+    )
     # Print when obtain message_id
     client.set_message_sent_handler(
         lambda pdu: sys.stdout.write(
@@ -138,11 +141,13 @@ def smpplib_main_loop(client, system_id, password):
 
 
 def start_smpp_client(options):
-    client = get_smpplib_client(options["host"], options["port"])
+    # client_id uniquely identifies this MNO-shortcode combination
+    client_id = f"{options['smsc_name']}_{options['system_id']}"
+    client = get_smpplib_client(client_id, options["host"], options["port"])
     client.set_message_received_handler(
         functools.partial(
             message_received_handler,
-            options["smsc_name"],
+            client_id,
             options["system_id"],
             json.loads(options["submit_sm_params"]),
         )
