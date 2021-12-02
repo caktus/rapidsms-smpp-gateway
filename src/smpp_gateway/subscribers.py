@@ -36,6 +36,7 @@ def handle_mo_messages(notify, smses=None):
             "from_addr": sms.params["source_addr"],
         }
         receive(sms.decoded_short_message, connection, fields=fields)
+    MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(status="done")
 
 
 def pg_listen(channel, handler):
