@@ -10,7 +10,6 @@ class MOMessage(models.Model):
         (NEW, "New"),
         ("processing", "Processing"),
         ("done", "Done"),
-        ("error", "Error"),
     )
 
     create_time = models.DateTimeField()
