@@ -1,5 +1,6 @@
 from django.contrib.postgres.fields import JSONField
 from django.db import connection, models
+from django.utils.functional import cached_property
 from rapidsms.models import Backend
 
 
@@ -20,6 +21,18 @@ class MOMessage(models.Model):
     short_message = models.BinaryField()
     params = JSONField()
     status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+
+    @cached_property
+    def decoded_short_message(self):
+        data_coding = self.params.get("data_coding", 0)
+        short_message = self.short_message.tobytes()
+        if data_coding == 0:
+            return short_message.decode("ascii")
+        if data_coding == 8:
+            return short_message.decode("utf-16-be")
+        raise ValueError(
+            f"Unsupported data_coding {data_coding}. Short message: {short_message}"
+        )
 
     def __str__(self):
         return f"{self.params['short_message']} ({self.id})"

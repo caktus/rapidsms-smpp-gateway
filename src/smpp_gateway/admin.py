@@ -7,7 +7,7 @@ from smpp_gateway.models import MOMessage, MTMessage
 class MOMessageAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "short_message",
+        "decoded_short_message",
         "backend",
         "status",
         "create_time",

@@ -28,15 +28,14 @@ def handle_mo_messages(notify, smses=None):
     if smses is None:
         smses = get_mo_messages()
     for sms in smses:
-        connections = lookup_connections(
+        connection = lookup_connections(
             backend=sms.backend, identities=[sms.params["source_addr"]]
-        )
-        for conn in connections:
-            fields = {
-                "to_addr": sms.params["destination_addr"],
-                "from_addr": sms.params["source_addr"],
-            }
-            receive(sms.params["short_message"], conn, fields=fields)
+        )[0]
+        fields = {
+            "to_addr": sms.params["destination_addr"],
+            "from_addr": sms.params["source_addr"],
+        }
+        receive(sms.decoded_short_message, connection, fields=fields)
 
 
 def pg_listen(channel, handler):
