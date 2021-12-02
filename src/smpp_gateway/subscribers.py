@@ -59,6 +59,6 @@ def get_mt_messages(channel, limit):
             .values("id", "short_message", "params")[:limit]
         )
         if smses:
-            pks = [sms["pk"] for sms in smses]
+            pks = [sms["id"] for sms in smses]
             MTMessage.objects.filter(pk__in=pks).update(status="processing")
     return smses

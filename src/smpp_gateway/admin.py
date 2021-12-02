@@ -8,11 +8,11 @@ class MOMessageAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "short_message",
-        "channel",
+        "backend",
         "status",
         "create_time",
     )
-    list_filter = ("status", "channel")
+    list_filter = ("status", "backend")
     ordering = ("-create_time",)
 
 
@@ -21,9 +21,9 @@ class MTMessageAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "short_message",
-        "channel",
+        "backend",
         "status",
         "create_time",
     )
-    list_filter = ("status", "channel")
+    list_filter = ("status", "backend")
     ordering = ("-create_time",)

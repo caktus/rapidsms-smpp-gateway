@@ -12,9 +12,9 @@ class PgSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
     https://www.postgresql.org/docs/10/sql-createsequence.html
     """
 
-    def __init__(self, conn, name):
+    def __init__(self, conn, backend_name):
         self.conn = conn
-        self.sequence_name = f"smpp_gateway_sequence_{name}"
+        self.sequence_name = f"smpp_gateway_sequence_{backend_name}"
         with conn.cursor() as curs:
             curs.execute(
                 f"""

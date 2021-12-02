@@ -14,7 +14,10 @@ class Command(BaseCommand):
     help = "Start an SMPP client instance."
 
     def add_arguments(self, parser):
-        parser.add_argument("smsc_name")
+        parser.add_argument(
+            "backend_name",
+            help="RapidSMS backend name. Will be created if it doesn't exist.",
+        )
         parser.add_argument(
             "--host",
             default=os.environ.get("SMPPLIB_HOST"),

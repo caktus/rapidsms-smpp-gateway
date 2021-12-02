@@ -13,33 +13,16 @@ import smpplib.consts
 import smpplib.gsm
 
 from django.db import connection as db_conn
-from psycopg2.extras import Json
+from django.utils import timezone
+from rapidsms.models import Backend
 
 from smpp_gateway.client import PgSequenceGenerator, ThreadSafeClient
+from smpp_gateway.models import MOMessage
 from smpp_gateway.subscribers import get_mt_messages, pg_listen
 
 logger = logging.getLogger(__name__)
 
 ASCII_PRINTABLE_BYTES = {ord(c) for c in string.printable}
-
-INSERT_MO_SMS_SQL = """
-INSERT INTO smpp_gateway_momessage (
-    create_time
-    , modify_time
-    , channel
-    , short_message
-    , params
-    , status
-)
-VALUES (
-    current_timestamp
-    , current_timestamp
-    , %s
-    , %s
-    , %s
-    , 'new'
-)
-"""
 
 TEST_MESSAGES = {
     "short": "هذه رسالة قصيرة.",
@@ -84,12 +67,18 @@ def send_test_replies(client, **kwargs):
         smpplib_send_message(client, message, **kwargs)
 
 
-def message_received_handler(client_id, system_id, submit_sm_params, pdu):
+def message_received_handler(backend, system_id, submit_sm_params, pdu):
+    now = timezone.now()
     mo_params = decoded_params(pdu)
+    MOMessage.objects.create(
+        create_time=now,
+        modify_time=now,
+        backend=backend,
+        short_message=pdu.short_message,
+        params=mo_params,
+        status=MOMessage.NEW,
+    )
     with db_conn.cursor() as cursor:
-        # channel, short_message, params
-        args = (client_id, pdu.short_message, Json(mo_params))
-        cursor.execute(INSERT_MO_SMS_SQL, args)
         cursor.execute("NOTIFY new_mo_msg;")
     if getattr(pdu, "receipted_message_id") is not None:
         # Don't send replies to delivery receipts. There's probably a better
@@ -114,8 +103,8 @@ def error_pdu_handler(client, pdu):
     )
 
 
-def get_smpplib_client(client_id, host, port):
-    sequence_generator = PgSequenceGenerator(db_conn, client_id)
+def get_smpplib_client(backend_name, host, port):
+    sequence_generator = PgSequenceGenerator(db_conn, backend_name)
     client = ThreadSafeClient(
         host, port, allow_unknown_opt_params=True, sequence_generator=sequence_generator
     )
@@ -157,13 +146,12 @@ def listen_mt_messages(client, channel):
 
 
 def start_smpp_client(options):
-    # client_id uniquely identifies this MNO-shortcode combination
-    client_id = f"{options['smsc_name']}_{options['system_id']}"
-    client = get_smpplib_client(client_id, options["host"], options["port"])
+    backend, _ = Backend.objects.get_or_create(name=options["backend_name"])
+    client = get_smpplib_client(backend.name, options["host"], options["port"])
     client.set_message_received_handler(
         functools.partial(
             message_received_handler,
-            client_id,
+            backend,
             options["system_id"],
             json.loads(options["submit_sm_params"]),
         )
@@ -176,14 +164,7 @@ def start_smpp_client(options):
             )
         )
         t_bulk.start()
-    t_mt = Thread(
-        target=functools.partial(
-            # FIXME: replace last arg with client_id once merged
-            listen_mt_messages,
-            client,
-            f"{options['smsc_name']}_{options['system_id']}",
-        )
-    )
+    t_mt = Thread(target=functools.partial(listen_mt_messages, client, backend))
     # FIXME: The whole program should die if this thread dies, otherwise no SMS will be sent...
     t_mt.start()
     smpplib_main_loop(client, options["system_id"], options["password"])
