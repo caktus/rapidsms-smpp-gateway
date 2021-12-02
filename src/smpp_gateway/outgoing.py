@@ -15,22 +15,21 @@ class SMPPGatewayBackend(BackendBase):
         pass
 
     def prepare_request(self, id_, text, identities, context):
-        params = {
-            "destination_addr": identities[0],
-        }
         now = timezone.now()
-        kwargs = {
-            "create_time": now,
-            "modify_time": now,
-            "channel": self.name,
-            "short_message": text,
-            "params": params,
-            "status": MTMessage.NEW,
-        }
-        return kwargs
+        return [
+            {
+                "create_time": now,
+                "modify_time": now,
+                "channel": self.name,
+                "short_message": text,
+                "params": {"destination_addr": identity},
+                "status": MTMessage.NEW,
+            }
+            for identity in identities
+        ]
 
     def send(self, id_, text, identities, context=None):
         logger.debug("Sending message: %s", text)
         context = context or {}
-        kwargs = self.prepare_request(id_, text, identities, context)
-        MTMessage.objects.create(**kwargs)
+        kwargs_list = self.prepare_request(id_, text, identities, context)
+        MTMessage.objects.bulk_create([MTMessage(**kwargs) for kwargs in kwargs_list])
