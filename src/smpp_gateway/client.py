@@ -95,13 +95,11 @@ class ThreadSafeClient(smpplib.client.Client):
 
     def send_mt_messages(self, notify):
         smses = self.get_mt_messages(limit=100)
-        while smses:
-            for sms in smses:
-                self.smpplib_send_message(sms["short_message"], **sms["params"])
-            MTMessage.objects.filter(pk__in=[sms["id"] for sms in smses]).update(
-                status="sent"
-            )
-            smses = self.get_mt_messages(limit=100)
+        for sms in smses:
+            self.smpplib_send_message(sms["short_message"], **sms["params"])
+        MTMessage.objects.filter(pk__in=[sms["id"] for sms in smses]).update(
+            status="sent"
+        )
 
     def receive_pg_notifies(self):
         self._pg_conn.poll()
@@ -111,6 +109,8 @@ class ThreadSafeClient(smpplib.client.Client):
             self.send_mt_messages(notify)
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
+        # Look for and send up to 100 messages on start up
+        self.send_mt_messages(None)
         while True:
             # When either main socket has data or rsock has data, select.select will return
             rlist, _, _ = select.select(
@@ -120,6 +120,8 @@ class ThreadSafeClient(smpplib.client.Client):
                 self.logger.debug("Socket timeout, listening again")
                 pdu = smpplib.smpp.make_pdu("enquire_link", client=self)
                 self.send_pdu(pdu)
+                # Look for and send up to 100 messages every 5
+                self.send_mt_messages()
                 continue
             elif not rlist:
                 # backwards-compatible with existing behavior
