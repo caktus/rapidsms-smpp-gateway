@@ -1,5 +1,6 @@
 import logging
 
+from django.db import connection
 from django.utils import timezone
 from rapidsms.backends.base import BackendBase
 
@@ -20,7 +21,7 @@ class SMPPGatewayBackend(BackendBase):
             {
                 "create_time": now,
                 "modify_time": now,
-                "channel": self.name,
+                "backend": self.model,
                 "short_message": text,
                 "params": {"destination_addr": identity},
                 "status": MTMessage.NEW,
@@ -33,3 +34,5 @@ class SMPPGatewayBackend(BackendBase):
         context = context or {}
         kwargs_list = self.prepare_request(id_, text, identities, context)
         MTMessage.objects.bulk_create([MTMessage(**kwargs) for kwargs in kwargs_list])
+        with connection.cursor() as curs:
+            curs.execute(f"NOTIFY {self.model.name}")

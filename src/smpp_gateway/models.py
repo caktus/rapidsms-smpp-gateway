@@ -4,8 +4,9 @@ from rapidsms.models import Backend
 
 
 class MOMessage(models.Model):
+    NEW = "new"
     STATUS_CHOICES = (
-        ("new", "New"),
+        (NEW, "New"),
         ("processing", "Processing"),
         ("done", "Done"),
         ("error", "Error"),

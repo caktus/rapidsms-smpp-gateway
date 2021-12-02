@@ -24,10 +24,6 @@ logger = logging.getLogger(__name__)
 
 ASCII_PRINTABLE_BYTES = {ord(c) for c in string.printable}
 
-TEST_MESSAGES = {
-    "short": "هذه رسالة قصيرة.",
-    "long": "هذه رسالة أطول لا يمكن احتواؤها في رسالة SMS واحدة. لا يزال ينبغي إعادة تجميعها في رسالة واحدة بواسطة هاتفك.",  # noqa: E501
-}
 
 REPLY_COUNTS = defaultdict(int)
 
@@ -57,16 +53,6 @@ def smpplib_send_message(client, message, **kwargs):
         )
 
 
-def send_test_replies(client, **kwargs):
-    destination_addr = kwargs["destination_addr"]
-    if REPLY_COUNTS[destination_addr] >= 3:
-        logger.warning(f"Hit reply limit for {destination_addr}; sending no response.")
-        return
-    REPLY_COUNTS[destination_addr] += 1
-    for message in TEST_MESSAGES.values():
-        smpplib_send_message(client, message, **kwargs)
-
-
 def message_received_handler(backend, system_id, submit_sm_params, pdu):
     now = timezone.now()
     mo_params = decoded_params(pdu)
@@ -80,14 +66,6 @@ def message_received_handler(backend, system_id, submit_sm_params, pdu):
     )
     with db_conn.cursor() as cursor:
         cursor.execute("NOTIFY new_mo_msg;")
-    if getattr(pdu, "receipted_message_id") is not None:
-        # Don't send replies to delivery receipts. There's probably a better
-        # way to tell if this is such a PDU.
-        return
-    mt_params = submit_sm_params.copy()
-    mt_params["source_addr"] = system_id
-    mt_params["destination_addr"] = mo_params["source_addr"]
-    send_test_replies(pdu.client, **mt_params)
 
 
 def error_pdu_handler(client, pdu):
