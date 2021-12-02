@@ -1,8 +1,15 @@
-import collections
+import logging
 import select
 import socket
 
+import psycopg2.extensions
 import smpplib
+
+from django.db import connection, transaction
+
+from smpp_gateway.models import MTMessage
+
+logger = logging.getLogger(__name__)
 
 
 class PgSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
@@ -47,41 +54,67 @@ class ThreadSafeClient(smpplib.client.Client):
     """
 
     def __init__(self, *args, **kwargs):
+        self.backend = kwargs.pop("backend")
         super().__init__(*args, **kwargs)
         # Any data received by this queue will be sent
-        self._send_queue = collections.deque()
-        # Any data sent to ssock shows up on rsock
-        self._rsock, self._ssock = socket.socketpair()
+        # self._send_queue = collections.deque()
+        # # Any data sent to ssock shows up on rsock
+        # self._rsock, self._ssock = socket.socketpair()
 
-    def send_pdu(self, pdu, send_later=False):
-        if send_later:
-            # Put the data to send inside the queue
-            self._send_queue.append(pdu)
-            # Trigger the main thread by sending data to ssock which goes to rsock
-            self._ssock.send(b"\x00")
-        else:
-            return super().send_pdu(pdu)
+        with connection.cursor() as cursor:
+            self._pg_conn = connection.connection
+            self._pg_conn.set_isolation_level(
+                psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT
+            )
+            # https://gist.github.com/pkese/2790749
+            cursor.execute(f"LISTEN {self.backend.name};")
+            logger.info(f"Waiting for notifications on channel '{self.backend.name}'")
 
-    def send_message(self, **kwargs):
-        """Send message
+    def smpplib_send_message(self, message, **kwargs):
+        # Two parts, UCS2, SMS with UDH
+        parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
+        for short_message in parts:
+            self.send_message(
+                short_message=short_message,
+                data_coding=data_coding,
+                esm_class=esm_class,
+                **kwargs,
+            )
 
-        Required Arguments:
-            source_addr_ton -- Source address TON
-            source_addr -- Source address (string)
-            dest_addr_ton -- Destination address TON
-            destination_addr -- Destination address (string)
-            short_message -- Message text (string)
-        """
+    def get_mt_messages(self, limit):
+        with transaction.atomic():
+            smses = (
+                MTMessage.objects.filter(status="new")
+                .select_for_update(skip_locked=True)
+                .values("id", "short_message", "params")[:limit]
+            )
+            if smses:
+                pks = [sms["id"] for sms in smses]
+                MTMessage.objects.filter(pk__in=pks).update(status="sending")
+        return smses
 
-        ssm = smpplib.smpp.make_pdu("submit_sm", client=self, **kwargs)
-        self.send_pdu(ssm, send_later=True)
-        return ssm
+    def send_mt_messages(self, notify):
+        smses = self.get_mt_messages(limit=100)
+        while smses:
+            for sms in smses:
+                self.smpplib_send_message(sms["short_message"], **sms["params"])
+            MTMessage.objects.filter(pk__in=[sms["id"] for sms in smses]).update(
+                status="sent"
+            )
+            smses = self.get_mt_messages(limit=100)
+
+    def receive_pg_notifies(self):
+        self._pg_conn.poll()
+        while self._pg_conn.notifies:
+            notify = self._pg_conn.notifies.pop()
+            logger.info(f"Got NOTIFY:{notify}")
+            self.send_mt_messages(notify)
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
         while True:
             # When either main socket has data or rsock has data, select.select will return
             rlist, _, _ = select.select(
-                [self._socket, self._rsock], [], [], self.timeout
+                [self._socket, self._pg_conn], [], [], self.timeout
             )
             if not rlist and auto_send_enquire_link:
                 self.logger.debug("Socket timeout, listening again")
@@ -95,7 +128,4 @@ class ThreadSafeClient(smpplib.client.Client):
                 if ready_socket is self._socket:
                     self.read_once(ignore_error_codes, auto_send_enquire_link)
                 else:
-                    # Ready_socket is rsock
-                    self._rsock.recv(1)  # Dump the ready mark
-                    # Send the data.
-                    super().send_pdu(self._send_queue.pop())
+                    self.receive_pg_notifies()

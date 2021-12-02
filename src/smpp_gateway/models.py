@@ -41,8 +41,9 @@ class MTMessage(models.Model):
     NEW = "new"
     STATUS_CHOICES = (
         (NEW, "New"),
-        ("processing", "Processing"),
-        ("done", "Done"),
+        ("sending", "Sending"),
+        ("sent", "Sent"),
+        ("delivered", "Delivered"),
         ("error", "Error"),
     )
 

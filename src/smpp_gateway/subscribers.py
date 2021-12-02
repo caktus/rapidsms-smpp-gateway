@@ -6,7 +6,7 @@ import psycopg2.extensions
 from django.db import connection, transaction
 from rapidsms.router import lookup_connections, receive
 
-from smpp_gateway.models import MOMessage, MTMessage
+from smpp_gateway.models import MOMessage
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +63,3 @@ def listen_mo_messages(channel):
         handle_mo_messages(None, smses=smses)
         smses = get_mo_messages(limit=100)
     pg_listen(channel, handle_mo_messages)
-
-
-def get_mt_messages(channel, limit):
-    with transaction.atomic():
-        smses = (
-            MTMessage.objects.filter(status="new")
-            .select_for_update(skip_locked=True)
-            .values("id", "short_message", "params")[:limit]
-        )
-        if smses:
-            pks = [sms["id"] for sms in smses]
-            MTMessage.objects.filter(pk__in=pks).update(status="processing")
-    return smses
