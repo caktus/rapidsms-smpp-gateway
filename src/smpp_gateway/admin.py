@@ -6,7 +6,6 @@ from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 @admin.register(MOMessage)
 class MOMessageAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
         "decoded_short_message",
         "backend",
         "status",
@@ -32,7 +31,6 @@ class MTMessageStatusInline(admin.TabularInline):
 @admin.register(MTMessage)
 class MTMessageAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
         "short_message",
         "backend",
         "status",

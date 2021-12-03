@@ -35,6 +35,9 @@ class MOMessage(models.Model):
     def __str__(self):
         return f"{self.params['short_message']} ({self.id})"
 
+    class Meta:
+        verbose_name = "mobile-originated message"
+
 
 class MTMessage(models.Model):
     NEW = "new"
@@ -63,6 +66,9 @@ class MTMessage(models.Model):
     def __str__(self):
         return f"{self.short_message} ({self.id})"
 
+    class Meta:
+        verbose_name = "mobile-terminated message"
+
 
 class MTMessageStatus(models.Model):
     """
@@ -88,6 +94,7 @@ class MTMessageStatus(models.Model):
         return f"{self.backend} ({self.sequence_number})"
 
     class Meta:
+        verbose_name = "mobile-terminated message status"
         constraints = [
             models.UniqueConstraint(
                 fields=["backend", "sequence_number"], name="unique_seq_num"
