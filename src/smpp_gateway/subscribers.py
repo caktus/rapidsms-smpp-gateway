@@ -6,27 +6,37 @@ import psycopg2.extensions
 from django.db import connection, transaction
 from rapidsms.router import lookup_connections, receive
 
-from smpp_gateway.models import MOMessage, MTMessage
+from smpp_gateway.models import MOMessage
 
 logger = logging.getLogger(__name__)
 
 
-def handle_mo_message(notify):
+def get_mo_messages(limit=1):
     with transaction.atomic():
-        sms = (
+        smses = (
             MOMessage.objects.filter(status="new")
-            .select_for_update(skip_locked=True)
-            .first()
+            .select_related("backend")
+            .select_for_update(skip_locked=True, of=("self",))[:limit]
         )
-        if sms is not None:
-            MOMessage.objects.filter(pk=sms.pk).update(status="processing")
-    if sms is not None:
-        backend_name = sms.channel.split("_")[0]
-        connections = lookup_connections(
-            backend=backend_name, identities=[sms.params["source_addr"]]
+        MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(
+            status="processing"
         )
-        for conn in connections:
-            receive(sms.params["short_message"], conn)
+    return smses
+
+
+def handle_mo_messages(notify, smses=None):
+    if smses is None:
+        smses = get_mo_messages()
+    for sms in smses:
+        connection = lookup_connections(
+            backend=sms.backend, identities=[sms.params["source_addr"]]
+        )[0]
+        fields = {
+            "to_addr": sms.params["destination_addr"],
+            "from_addr": sms.params["source_addr"],
+        }
+        receive(sms.decoded_short_message, connection, fields=fields)
+    MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(status="done")
 
 
 def pg_listen(channel, handler):
@@ -48,17 +58,8 @@ def pg_listen(channel, handler):
 
 
 def listen_mo_messages(channel):
-    pg_listen(channel, handle_mo_message)
-
-
-def get_mt_messages(channel, limit):
-    with transaction.atomic():
-        smses = (
-            MTMessage.objects.filter(status="new")
-            .select_for_update(skip_locked=True)
-            .values("id", "short_message", "params")[:limit]
-        )
-        if smses:
-            pks = [sms["pk"] for sms in smses]
-            MTMessage.objects.filter(pk__in=pks).update(status="processing")
-    return smses
+    smses = get_mo_messages(limit=100)
+    while smses:
+        handle_mo_messages(None, smses=smses)
+        smses = get_mo_messages(limit=100)
+    pg_listen(channel, handle_mo_messages)

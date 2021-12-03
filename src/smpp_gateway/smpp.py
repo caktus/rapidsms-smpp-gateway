@@ -6,45 +6,22 @@ import string
 import sys
 
 from collections import defaultdict
-from threading import Thread
 
 import smpplib.client
 import smpplib.consts
 import smpplib.gsm
 
 from django.db import connection as db_conn
-from psycopg2.extras import Json
+from django.utils import timezone
+from rapidsms.models import Backend
 
-from smpp_gateway.client import PgSequenceGenerator, ThreadSafeClient
-from smpp_gateway.subscribers import get_mt_messages, pg_listen
+from smpp_gateway.client import PgSmppClient, PgSmppSequenceGenerator
+from smpp_gateway.models import MOMessage
 
 logger = logging.getLogger(__name__)
 
 ASCII_PRINTABLE_BYTES = {ord(c) for c in string.printable}
 
-INSERT_MO_SMS_SQL = """
-INSERT INTO smpp_gateway_momessage (
-    create_time
-    , modify_time
-    , channel
-    , short_message
-    , params
-    , status
-)
-VALUES (
-    current_timestamp
-    , current_timestamp
-    , %s
-    , %s
-    , %s
-    , 'new'
-)
-"""
-
-TEST_MESSAGES = {
-    "short": "هذه رسالة قصيرة.",
-    "long": "هذه رسالة أطول لا يمكن احتواؤها في رسالة SMS واحدة. لا يزال ينبغي إعادة تجميعها في رسالة واحدة بواسطة هاتفك.",  # noqa: E501
-}
 
 REPLY_COUNTS = defaultdict(int)
 
@@ -62,43 +39,19 @@ def decoded_params(pdu):
     return {key: maybe_decode(getattr(pdu, key)) for key in pdu.params.keys()}
 
 
-def smpplib_send_message(client, message, **kwargs):
-    # Two parts, UCS2, SMS with UDH
-    parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
-    for short_message in parts:
-        client.send_message(
-            short_message=short_message,
-            data_coding=data_coding,
-            esm_class=esm_class,
-            **kwargs,
-        )
-
-
-def send_test_replies(client, **kwargs):
-    destination_addr = kwargs["destination_addr"]
-    if REPLY_COUNTS[destination_addr] >= 3:
-        logger.warning(f"Hit reply limit for {destination_addr}; sending no response.")
-        return
-    REPLY_COUNTS[destination_addr] += 1
-    for message in TEST_MESSAGES.values():
-        smpplib_send_message(client, message, **kwargs)
-
-
-def message_received_handler(client_id, system_id, submit_sm_params, pdu):
+def message_received_handler(backend, system_id, submit_sm_params, pdu):
+    now = timezone.now()
     mo_params = decoded_params(pdu)
+    MOMessage.objects.create(
+        create_time=now,
+        modify_time=now,
+        backend=backend,
+        short_message=pdu.short_message,
+        params=mo_params,
+        status=MOMessage.NEW,
+    )
     with db_conn.cursor() as cursor:
-        # channel, short_message, params
-        args = (client_id, pdu.short_message, Json(mo_params))
-        cursor.execute(INSERT_MO_SMS_SQL, args)
         cursor.execute("NOTIFY new_mo_msg;")
-    if getattr(pdu, "receipted_message_id") is not None:
-        # Don't send replies to delivery receipts. There's probably a better
-        # way to tell if this is such a PDU.
-        return
-    mt_params = submit_sm_params.copy()
-    mt_params["source_addr"] = system_id
-    mt_params["destination_addr"] = mo_params["source_addr"]
-    send_test_replies(pdu.client, **mt_params)
 
 
 def error_pdu_handler(client, pdu):
@@ -114,10 +67,14 @@ def error_pdu_handler(client, pdu):
     )
 
 
-def get_smpplib_client(client_id, host, port):
-    sequence_generator = PgSequenceGenerator(db_conn, client_id)
-    client = ThreadSafeClient(
-        host, port, allow_unknown_opt_params=True, sequence_generator=sequence_generator
+def get_smpplib_client(backend, host, port):
+    sequence_generator = PgSmppSequenceGenerator(db_conn, backend.name)
+    client = PgSmppClient(
+        host,
+        port,
+        allow_unknown_opt_params=True,
+        sequence_generator=sequence_generator,
+        backend=backend,
     )
     # Print when obtain message_id
     client.set_message_sent_handler(
@@ -128,62 +85,22 @@ def get_smpplib_client(client_id, host, port):
     return client
 
 
-def send_test_bulksms(client, source_addr, count):
-    for x in range(count):
-        smpplib_send_message(
-            client, f"Test {x}", source_addr=source_addr, destination_addr="99999"
-        )
-
-
 def smpplib_main_loop(client, system_id, password):
     client.connect()
     client.bind_transceiver(system_id=system_id, password=password)
     client.listen()
 
 
-def send_mt_messages(client, channel, notify):
-    smses = get_mt_messages(channel, limit=100)
-    while smses:
-        for sms in smses:
-            smpplib_send_message(client, sms["short_message"], **sms["params"])
-        smses = get_mt_messages(channel, limit=100)
-
-
-def listen_mt_messages(client, channel):
-    # Send any queued messages on startup
-    send_mt_messages(client, channel, None)
-    # Listen for more messages to send
-    pg_listen(channel, functools.partial(send_mt_messages, client, channel))
-
-
 def start_smpp_client(options):
-    # client_id uniquely identifies this MNO-shortcode combination
-    client_id = f"{options['smsc_name']}_{options['system_id']}"
-    client = get_smpplib_client(client_id, options["host"], options["port"])
+    backend, _ = Backend.objects.get_or_create(name=options["backend_name"])
+    client = get_smpplib_client(backend, options["host"], options["port"])
     client.set_message_received_handler(
         functools.partial(
             message_received_handler,
-            client_id,
+            backend,
             options["system_id"],
             json.loads(options["submit_sm_params"]),
         )
     )
     client.set_error_pdu_handler(functools.partial(error_pdu_handler, client))
-    if options["send_bulksms"]:
-        t_bulk = Thread(
-            target=functools.partial(
-                send_test_bulksms, client, options["system_id"], options["send_bulksms"]
-            )
-        )
-        t_bulk.start()
-    t_mt = Thread(
-        target=functools.partial(
-            # FIXME: replace last arg with client_id once merged
-            listen_mt_messages,
-            client,
-            f"{options['smsc_name']}_{options['system_id']}",
-        )
-    )
-    # FIXME: The whole program should die if this thread dies, otherwise no SMS will be sent...
-    t_mt.start()
     smpplib_main_loop(client, options["system_id"], options["password"])
