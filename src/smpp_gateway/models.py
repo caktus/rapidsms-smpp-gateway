@@ -62,3 +62,34 @@ class MTMessage(models.Model):
 
     def __str__(self):
         return f"{self.short_message} ({self.id})"
+
+
+class MTMessageStatus(models.Model):
+    """
+    Database table for collecting the various information about MT messages
+    we sent, including:
+    - The initial sequence_number established by us when the message was sent
+    - The message_id we receive from the MC (via its submit_sm_resp)
+    - The delivery_report we receive from the MC (via its deliver_sm)
+    """
+
+    mt_message = models.ForeignKey(MTMessage, on_delete=models.CASCADE)
+    backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
+    sequence_number = models.IntegerField()
+    command_status = models.IntegerField(null=True)
+    message_id = models.CharField(max_length=255, blank=True, default="")
+    delivery_report = models.BinaryField(null=True)
+
+    @cached_property
+    def delivery_report_as_bytes(self):
+        return self.delivery_report.tobytes()
+
+    def __str__(self):
+        return f"{self.backend} ({self.sequence_number})"
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["backend", "sequence_number"], name="unique_seq_num"
+            )
+        ]

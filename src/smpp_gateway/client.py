@@ -2,12 +2,16 @@ import logging
 import select
 import socket
 
-import psycopg2.extensions
 import smpplib
+import smpplib.client
+import smpplib.consts
+import smpplib.gsm
 
-from django.db import connection, transaction
+from django.utils import timezone
 
-from smpp_gateway.models import MTMessage
+from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
+from smpp_gateway.queries import get_mt_messages_to_send, pg_listen, pg_notify
+from smpp_gateway.utils import decoded_params
 
 logger = logging.getLogger(__name__)
 
@@ -57,47 +61,111 @@ class PgSmppClient(smpplib.client.Client):
 
     def __init__(self, *args, **kwargs):
         self.backend = kwargs.pop("backend")
+        self.submit_sm_params = kwargs.pop("submit_sm_params")
         super().__init__(*args, **kwargs)
+        self._pg_conn = pg_listen(self.backend.name)
 
-        with connection.cursor() as cursor:
-            self._pg_conn = connection.connection
-            self._pg_conn.set_isolation_level(
-                psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT
+    # ############### Handlers ################
+
+    def _create_mo_message(self, pdu, params):
+        now = timezone.now()
+        MOMessage.objects.create(
+            create_time=now,
+            modify_time=now,
+            backend=self.backend,
+            short_message=pdu.short_message,
+            params=params,
+            status=MOMessage.NEW,
+        )
+        pg_notify("new_mo_msg")  # FIXME: Is this configurable?
+
+    def _save_delivery_receipt(self, pdu, params):
+        count = MTMessageStatus.objects.filter(
+            backend=self.backend, message_id=params["receipted_message_id"]
+        ).update(delivery_report=pdu.short_message)
+        if count == 0:
+            logger.warning(
+                f"Found no MTMessageStatus for backend={self.backend}, "
+                f"message_id={params['receipted_message_id']}. "
+                f"delivery_report={pdu.short_message}"
             )
-            # https://gist.github.com/pkese/2790749
-            cursor.execute(f"LISTEN {self.backend.name};")
-            logger.info(f"Waiting for notifications on channel '{self.backend.name}'")
 
-    def smpplib_send_message(self, message, **kwargs):
+    def message_received_handler(self, pdu):
+        mo_params = decoded_params(pdu)
+        if mo_params.get("receipted_message_id"):
+            self._save_delivery_receipt(pdu, mo_params)
+        else:
+            self._create_mo_message(pdu, mo_params)
+
+    def message_sent_handler(self, pdu):
+        params = decoded_params(pdu)
+        count = MTMessageStatus.objects.filter(
+            backend=self.backend,
+            sequence_number=pdu.sequence,
+        ).update(
+            command_status=pdu.status,
+            message_id=params["message_id"],
+        )
+        if count == 0:
+            logger.warning(
+                f"Found no MTMessageStatus for {self.backend}, {pdu.sequence}. "
+                f"status={pdu.status}, message_id={params['message_id']}"
+            )
+
+    def error_pdu_handler(client, pdu):
+        params = decoded_params(pdu)
+        logger.debug(str(params))
+        raise smpplib.exceptions.PDUError(
+            "({}) {}: {}".format(
+                pdu.status,
+                pdu.command,
+                smpplib.consts.DESCRIPTIONS.get(pdu.status, "Unknown status"),
+            ),
+            int(pdu.status),
+        )
+
+    # ############### Listen for and send MT Messages ################
+
+    def split_and_send_message(self, message, **kwargs):
+        """
+        Splits and sends the given message, returning the underlying PDUs.
+        The "source_addr" and "destination_addr" keyword arguments are required
+        by python-smpplib.
+        """
         # Two parts, UCS2, SMS with UDH
         parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
-        for short_message in parts:
+        return [
             self.send_message(
                 short_message=short_message,
                 data_coding=data_coding,
                 esm_class=esm_class,
                 **kwargs,
             )
-
-    def get_mt_messages(self, limit):
-        with transaction.atomic():
-            smses = (
-                MTMessage.objects.filter(status="new")
-                .select_for_update(skip_locked=True)
-                .values("id", "short_message", "params")[:limit]
-            )
-            if smses:
-                pks = [sms["id"] for sms in smses]
-                MTMessage.objects.filter(pk__in=pks).update(status="sending")
-        return smses
+            for short_message in parts
+        ]
 
     def send_mt_messages(self, notify=None):
-        smses = self.get_mt_messages(limit=100)
+        smses = get_mt_messages_to_send(limit=100)
+        submit_sm_resps = []
         for sms in smses:
-            self.smpplib_send_message(sms["short_message"], **sms["params"])
-        MTMessage.objects.filter(pk__in=[sms["id"] for sms in smses]).update(
-            status="sent"
-        )
+            params = {**self.submit_sm_params, **sms["params"]}
+            pdus = self.split_and_send_message(sms["short_message"], **params)
+            # Create placeholder MTMessageStatus objects in the DB, which
+            # the message_sent handler will later update with the actual command_status
+            # and message_id (and eventually maybe a delivery report).
+            submit_sm_resps.extend(
+                [
+                    MTMessageStatus(
+                        mt_message_id=sms["id"],
+                        backend=self.backend,
+                        sequence_number=pdu.sequence,
+                    )
+                    for pdu in pdus
+                ]
+            )
+        pks = [sms["id"] for sms in smses]
+        MTMessage.objects.filter(pk__in=pks).update(status="sent")
+        MTMessageStatus.objects.bulk_create(submit_sm_resps)
 
     def receive_pg_notifies(self):
         self._pg_conn.poll()
@@ -105,6 +173,8 @@ class PgSmppClient(smpplib.client.Client):
             notify = self._pg_conn.notifies.pop()
             logger.info(f"Got NOTIFY:{notify}")
             self.send_mt_messages(notify)
+
+    # ############### Main loop ################
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
         # Look for and send up to 100 messages on start up

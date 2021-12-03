@@ -1,4 +1,8 @@
+import base64
 import itertools
+import string
+
+ASCII_PRINTABLE_BYTES = {ord(c) for c in string.printable}
 
 
 def grouper(iterable, n):
@@ -15,3 +19,16 @@ def grouper(iterable, n):
         if not group:
             break
         yield group
+
+
+def maybe_decode(value):
+    if isinstance(value, bytes):
+        if all(b in ASCII_PRINTABLE_BYTES for b in value):
+            return value.decode("ascii")
+        else:
+            return base64.b64encode(value).decode("utf-8")
+    return value
+
+
+def decoded_params(pdu):
+    return {key: maybe_decode(getattr(pdu, key)) for key in pdu.params.keys()}

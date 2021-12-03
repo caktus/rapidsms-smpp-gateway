@@ -18,8 +18,8 @@ class SMPPGatewayBackend(BackendBase):
         self.socket_timeout = kwargs.get("socket_timeout", 5)
 
     def prepare_request(self, id_, text, identities, context):
-        now = timezone.now()
         for identity in identities:
+            now = timezone.now()
             yield {
                 "create_time": now,
                 "modify_time": now,
