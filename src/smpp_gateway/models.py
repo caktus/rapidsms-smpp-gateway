@@ -14,8 +14,7 @@ class MOMessage(models.Model):
 
     create_time = models.DateTimeField()
     modify_time = models.DateTimeField()
-    # FIXME: Remove null=True when resetting migrations
-    backend = models.ForeignKey(Backend, null=True, on_delete=models.PROTECT)
+    backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # Save the raw bytes, in case they're needed later
     short_message = models.BinaryField()
     params = JSONField()
@@ -49,8 +48,7 @@ class MTMessage(models.Model):
 
     create_time = models.DateTimeField()
     modify_time = models.DateTimeField()
-    # FIXME: Remove null=True when resetting migrations
-    backend = models.ForeignKey(Backend, null=True, on_delete=models.PROTECT)
+    backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # SMPP client will decide how to encode it
     short_message = models.TextField()
     params = JSONField()
