@@ -15,7 +15,7 @@ from django.db import connection as db_conn
 from django.utils import timezone
 from rapidsms.models import Backend
 
-from smpp_gateway.client import PgSequenceGenerator, ThreadSafeClient
+from smpp_gateway.client import PgSmppClient, PgSmppSequenceGenerator
 from smpp_gateway.models import MOMessage
 
 logger = logging.getLogger(__name__)
@@ -68,8 +68,8 @@ def error_pdu_handler(client, pdu):
 
 
 def get_smpplib_client(backend, host, port):
-    sequence_generator = PgSequenceGenerator(db_conn, backend.name)
-    client = ThreadSafeClient(
+    sequence_generator = PgSmppSequenceGenerator(db_conn, backend.name)
+    client = PgSmppClient(
         host,
         port,
         allow_unknown_opt_params=True,

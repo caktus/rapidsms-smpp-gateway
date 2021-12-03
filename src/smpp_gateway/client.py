@@ -12,7 +12,7 @@ from smpp_gateway.models import MTMessage
 logger = logging.getLogger(__name__)
 
 
-class PgSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
+class PgSmppSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
     """
     smpplib sequence generator that uses a Postgres sequence to persist
     sequence numbers across restarts and client instances. See:
@@ -47,19 +47,17 @@ class PgSequenceGenerator(smpplib.client.SimpleSequenceGenerator):
         return self._fetchone(f"SELECT nextval('{self.sequence_name}')")
 
 
-class ThreadSafeClient(smpplib.client.Client):
+class PgSmppClient(smpplib.client.Client):
     """
-    Thread-safe smpplib Client, adapted from:
-    https://stackoverflow.com/a/51105047/166053
+    Thread-safe smpplib Client that waits for messages to send via
+    Postgres' LISTEN statement. Loosely adapted from:
+    https://stackoverflow.com/a/51105047/166053 and
+    https://gist.github.com/pkese/2790749
     """
 
     def __init__(self, *args, **kwargs):
         self.backend = kwargs.pop("backend")
         super().__init__(*args, **kwargs)
-        # Any data received by this queue will be sent
-        # self._send_queue = collections.deque()
-        # # Any data sent to ssock shows up on rsock
-        # self._rsock, self._ssock = socket.socketpair()
 
         with connection.cursor() as cursor:
             self._pg_conn = connection.connection
@@ -93,7 +91,7 @@ class ThreadSafeClient(smpplib.client.Client):
                 MTMessage.objects.filter(pk__in=pks).update(status="sending")
         return smses
 
-    def send_mt_messages(self, notify):
+    def send_mt_messages(self, notify=None):
         smses = self.get_mt_messages(limit=100)
         for sms in smses:
             self.smpplib_send_message(sms["short_message"], **sms["params"])
@@ -110,9 +108,9 @@ class ThreadSafeClient(smpplib.client.Client):
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
         # Look for and send up to 100 messages on start up
-        self.send_mt_messages(None)
+        self.send_mt_messages()
         while True:
-            # When either main socket has data or rsock has data, select.select will return
+            # When either main socket has data or _pg_conn has data, select.select will return
             rlist, _, _ = select.select(
                 [self._socket, self._pg_conn], [], [], self.timeout
             )
@@ -120,7 +118,7 @@ class ThreadSafeClient(smpplib.client.Client):
                 self.logger.debug("Socket timeout, listening again")
                 pdu = smpplib.smpp.make_pdu("enquire_link", client=self)
                 self.send_pdu(pdu)
-                # Look for and send up to 100 messages every 5
+                # Look for and send up to 100 messages every 5 seconds
                 self.send_mt_messages()
                 continue
             elif not rlist:
