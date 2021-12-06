@@ -104,8 +104,3 @@ class MTMessageStatus(AbstractTimestampModel, models.Model):
                 fields=["backend", "sequence_number"], name="unique_seq_num"
             )
         ]
-        index = [
-            models.UniqueConstraint(
-                fields=["backend", "sequence_number"], name="unique_seq_num"
-            )
-        ]
