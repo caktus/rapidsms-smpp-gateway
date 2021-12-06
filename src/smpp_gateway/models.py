@@ -4,7 +4,15 @@ from django.utils.functional import cached_property
 from rapidsms.models import Backend
 
 
-class MOMessage(models.Model):
+class AbstractTimestampModel(models.Model):
+    create_time = models.DateTimeField()
+    modify_time = models.DateTimeField()
+
+    class Meta:
+        abstract = True
+
+
+class MOMessage(AbstractTimestampModel, models.Model):
     NEW = "new"
     STATUS_CHOICES = (
         (NEW, "New"),
@@ -12,8 +20,6 @@ class MOMessage(models.Model):
         ("done", "Done"),
     )
 
-    create_time = models.DateTimeField()
-    modify_time = models.DateTimeField()
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # Save the raw bytes, in case they're needed later
     short_message = models.BinaryField()
@@ -39,7 +45,7 @@ class MOMessage(models.Model):
         verbose_name = "mobile-originated message"
 
 
-class MTMessage(models.Model):
+class MTMessage(AbstractTimestampModel, models.Model):
     NEW = "new"
     STATUS_CHOICES = (
         (NEW, "New"),
@@ -49,8 +55,6 @@ class MTMessage(models.Model):
         ("error", "Error"),
     )
 
-    create_time = models.DateTimeField()
-    modify_time = models.DateTimeField()
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # SMPP client will decide how to encode it
     short_message = models.TextField()
@@ -70,7 +74,7 @@ class MTMessage(models.Model):
         verbose_name = "mobile-terminated message"
 
 
-class MTMessageStatus(models.Model):
+class MTMessageStatus(AbstractTimestampModel, models.Model):
     """
     Database table for collecting the various information about MT messages
     we sent, including:
@@ -96,6 +100,11 @@ class MTMessageStatus(models.Model):
     class Meta:
         verbose_name = "mobile-terminated message status"
         constraints = [
+            models.UniqueConstraint(
+                fields=["backend", "sequence_number"], name="unique_seq_num"
+            )
+        ]
+        index = [
             models.UniqueConstraint(
                 fields=["backend", "sequence_number"], name="unique_seq_num"
             )

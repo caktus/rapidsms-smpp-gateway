@@ -82,13 +82,23 @@ class PgSmppClient(smpplib.client.Client):
     def _save_delivery_receipt(self, pdu, params):
         count = MTMessageStatus.objects.filter(
             backend=self.backend, message_id=params["receipted_message_id"]
-        ).update(delivery_report=pdu.short_message)
+        ).update(
+            modify_time=timezone.now(),
+            delivery_report=pdu.short_message,
+        )
         if count == 0:
             logger.warning(
                 f"Found no MTMessageStatus for backend={self.backend}, "
                 f"message_id={params['receipted_message_id']}. "
                 f"delivery_report={pdu.short_message}"
             )
+        count = MTMessage.objects.filter(
+            backend=self.backend,
+            mtmessagestatus__message_id=params["receipted_message_id"],
+        ).update(
+            modify_time=timezone.now(),
+            delivery_report=pdu.short_message,
+        )
 
     def message_received_handler(self, pdu):
         mo_params = decoded_params(pdu)
@@ -103,8 +113,9 @@ class PgSmppClient(smpplib.client.Client):
             backend=self.backend,
             sequence_number=pdu.sequence,
         ).update(
+            modify_time=timezone.now(),
             command_status=pdu.status,
-            message_id=params["message_id"],
+            message_id=params["message_id"] or "",
         )
         if count == 0:
             logger.warning(
@@ -112,16 +123,16 @@ class PgSmppClient(smpplib.client.Client):
                 f"status={pdu.status}, message_id={params['message_id']}"
             )
 
-    def error_pdu_handler(client, pdu):
-        params = decoded_params(pdu)
-        logger.debug(str(params))
-        raise smpplib.exceptions.PDUError(
+    def error_pdu_handler(self, pdu):
+        if pdu.command == "submit_sm_resp":
+            # update MTMessageStatus record with the error
+            self.message_sent_handler(pdu)
+        logger.warning(
             "({}) {}: {}".format(
                 pdu.status,
                 pdu.command,
                 smpplib.consts.DESCRIPTIONS.get(pdu.status, "Unknown status"),
             ),
-            int(pdu.status),
         )
 
     # ############### Listen for and send MT Messages ################
@@ -145,7 +156,7 @@ class PgSmppClient(smpplib.client.Client):
         ]
 
     def send_mt_messages(self, notify=None):
-        smses = get_mt_messages_to_send(limit=100)
+        smses = get_mt_messages_to_send(limit=1000)
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -153,9 +164,12 @@ class PgSmppClient(smpplib.client.Client):
             # Create placeholder MTMessageStatus objects in the DB, which
             # the message_sent handler will later update with the actual command_status
             # and message_id (and eventually maybe a delivery report).
+            now = timezone.now()
             submit_sm_resps.extend(
                 [
                     MTMessageStatus(
+                        create_time=now,
+                        modify_time=now,
                         mt_message_id=sms["id"],
                         backend=self.backend,
                         sequence_number=pdu.sequence,
@@ -164,7 +178,10 @@ class PgSmppClient(smpplib.client.Client):
                 ]
             )
         pks = [sms["id"] for sms in smses]
-        MTMessage.objects.filter(pk__in=pks).update(status="sent")
+        MTMessage.objects.filter(pk__in=pks).update(
+            status="sent",
+            modify_time=timezone.now(),
+        )
         MTMessageStatus.objects.bulk_create(submit_sm_resps)
 
     def receive_pg_notifies(self):
