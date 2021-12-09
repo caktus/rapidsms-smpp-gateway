@@ -97,7 +97,7 @@ class PgSmppClient(smpplib.client.Client):
             mtmessagestatus__message_id=params["receipted_message_id"],
         ).update(
             modify_time=timezone.now(),
-            delivery_report=pdu.short_message,
+            status="delivered",
         )
 
     def message_received_handler(self, pdu):
@@ -156,7 +156,7 @@ class PgSmppClient(smpplib.client.Client):
         ]
 
     def send_mt_messages(self, notify=None):
-        smses = get_mt_messages_to_send(limit=1000)
+        smses = get_mt_messages_to_send(limit=1000, backend=self.backend)
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}

@@ -37,15 +37,16 @@ def pg_poll(channel, pg_conn, handler):
                 handler(notify)
 
 
-def get_mt_messages_to_send(limit):
+def get_mt_messages_to_send(limit, backend):
     with transaction.atomic():
         smses = list(
-            MTMessage.objects.filter(status="new")
+            MTMessage.objects.filter(status="new", backend=backend)
             .select_for_update(skip_locked=True)
             .values("id", "short_message", "params")[:limit]
         )
         if smses:
             pks = [sms["id"] for sms in smses]
+            logger.debug(f"get_mt_messages_to_send: Marking {pks} as sending")
             MTMessage.objects.filter(pk__in=pks).update(status="sending")
     return smses
 
@@ -57,6 +58,8 @@ def get_mo_messages_to_process(limit=1):
             .select_related("backend")
             .select_for_update(skip_locked=True, of=("self",))[:limit]
         )
+        pks = [sms.pk for sms in smses]
+        logger.debug(f"get_mo_messages_to_process: Marking {pks} as processing")
         MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(
             status="processing"
         )
