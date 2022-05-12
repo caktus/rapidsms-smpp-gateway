@@ -21,8 +21,11 @@ django = ">=3.2,<4.0"
 [tool.poetry.dev-dependencies]
 pytest = "~6.2"
 pre-commit = "~2.15"
-black = "21.11b1"
+black = "22.3.0"
 python-semantic-release = "~7.22"
+pytest-django = "^4.5.2"
+factory-boy = "^3.2.1"
+django-stubs = "^1.10.1"
 
 [build-system]
 requires = [ "poetry-core>=1.0.0", "setuptools" ]
@@ -40,3 +43,13 @@ use_parentheses = true
 line_length = 100
 lines_between_types = 1
 src_paths = [ "src", "tests" ]
+
+[tool.pytest.ini_options]
+addopts = "--reuse-db"
+testpaths = [ "tests" ]
+
+[tool.mypy]
+plugins = [ "mypy_django_plugin.main" ]
+
+[tool.django-stubs]
+django_settings_module = "myproject.settings"

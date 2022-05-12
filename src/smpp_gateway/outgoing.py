@@ -26,7 +26,7 @@ class SMPPGatewayBackend(BackendBase):
                 "backend": self.model,
                 "short_message": text,
                 "params": {"destination_addr": identity},
-                "status": MTMessage.NEW,
+                "status": MTMessage.Status.NEW,
             }
 
     def send(self, id_, text, identities, context=None):

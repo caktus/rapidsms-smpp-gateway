@@ -1,9 +1,13 @@
 import logging
 import select
 
+from typing import Any, Dict, List
+
 import psycopg2.extensions
 
 from django.db import connection, transaction
+from django.db.models import QuerySet
+from rapidsms.models import Backend
 
 from smpp_gateway.models import MOMessage, MTMessage
 
@@ -37,21 +41,26 @@ def pg_poll(channel, pg_conn, handler):
                 handler(notify)
 
 
-def get_mt_messages_to_send(limit, backend):
+def get_mt_messages_to_send(limit: int, backend: Backend) -> List[Dict[str, Any]]:
+    """Fetches up to `limit` messages intended for `backend`, updates their
+    status to SENDING, and returns select fields from the model.
+    """
     with transaction.atomic():
         smses = list(
-            MTMessage.objects.filter(status="new", backend=backend)
+            MTMessage.objects.filter(status=MTMessage.Status.NEW, backend=backend)
             .select_for_update(skip_locked=True)
             .values("id", "short_message", "params")[:limit]
         )
         if smses:
             pks = [sms["id"] for sms in smses]
-            logger.debug(f"get_mt_messages_to_send: Marking {pks} as sending")
-            MTMessage.objects.filter(pk__in=pks).update(status="sending")
+            logger.debug(
+                f"get_mt_messages_to_send: Marking {pks} as {MTMessage.Status.SENDING.label}"
+            )
+            MTMessage.objects.filter(pk__in=pks).update(status=MTMessage.Status.SENDING)
     return smses
 
 
-def get_mo_messages_to_process(limit=1):
+def get_mo_messages_to_process(limit: int = 1) -> QuerySet[MOMessage]:
     with transaction.atomic():
         smses = (
             MOMessage.objects.filter(status="new")
