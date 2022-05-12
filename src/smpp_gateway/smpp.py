@@ -9,9 +9,12 @@ from smpp_gateway.client import PgSmppClient, PgSmppSequenceGenerator
 logger = logging.getLogger(__name__)
 
 
-def get_smpplib_client(backend, host, port, submit_sm_params):
+def get_smpplib_client(
+    notify_mo_channel, backend, host, port, submit_sm_params
+) -> PgSmppClient:
     sequence_generator = PgSmppSequenceGenerator(db_conn, backend.name)
     client = PgSmppClient(
+        notify_mo_channel,
         host,
         port,
         allow_unknown_opt_params=True,
@@ -22,7 +25,7 @@ def get_smpplib_client(backend, host, port, submit_sm_params):
     return client
 
 
-def smpplib_main_loop(client, system_id, password):
+def smpplib_main_loop(client: PgSmppClient, system_id: str, password: str):
     client.connect()
     client.bind_transceiver(system_id=system_id, password=password)
     client.listen()
@@ -31,6 +34,7 @@ def smpplib_main_loop(client, system_id, password):
 def start_smpp_client(options):
     backend, _ = Backend.objects.get_or_create(name=options["backend_name"])
     client = get_smpplib_client(
+        options["notify_mo_channel"],
         backend,
         options["host"],
         options["port"],

@@ -19,7 +19,7 @@ psycopg2 = ">=2.8"
 django = ">=3.2,<4.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "~6.2"
+pytest = "~7"
 pre-commit = "~2.15"
 black = "22.3.0"
 python-semantic-release = "~7.22"
@@ -47,9 +47,12 @@ src_paths = [ "src", "tests" ]
 [tool.pytest.ini_options]
 addopts = "--reuse-db"
 testpaths = [ "tests" ]
+django_find_project = false
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = [ ".", "src" ]
 
 [tool.mypy]
 plugins = [ "mypy_django_plugin.main" ]
 
 [tool.django-stubs]
-django_settings_module = "myproject.settings"
+django_settings_module = "tests.settings"

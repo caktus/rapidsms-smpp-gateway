@@ -1,5 +1,4 @@
 import logging
-import select
 
 from typing import Any, Dict, List
 
@@ -14,31 +13,31 @@ from smpp_gateway.models import MOMessage, MTMessage
 logger = logging.getLogger(__name__)
 
 
-def pg_listen(channel):
+def pg_listen(channel: str) -> psycopg2.extensions.connection:
+    """Return a new connection listening for notifications on `channel`.
+
+    Can be used like:
+    >>> conn = pg_listen("my_channel")
+    >>> conn.poll()
+    >>> for notify in conn.notifies:
+    >>>    print(f"I got a notification: {notify}")
+
+    or with helper `pg_poll()`.
+    """
     with connection.cursor() as cursor:
         pg_conn = connection.connection
         pg_conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
         # https://gist.github.com/pkese/2790749
         cursor.execute(f"LISTEN {channel};")
         logger.info(f"Waiting for notifications on channel '{channel}'")
+
     return pg_conn
 
 
-def pg_notify(channel):
+def pg_notify(channel: str):
+    """Send a notification on `channel` with empty payload."""
     with connection.cursor() as cursor:
         cursor.execute(f"NOTIFY {channel};")
-
-
-def pg_poll(channel, pg_conn, handler):
-    while True:
-        if select.select([pg_conn], [], [], 5) == ([], [], []):
-            logger.debug(f"{channel} .")
-        else:
-            pg_conn.poll()
-            while pg_conn.notifies:
-                notify = pg_conn.notifies.pop()
-                logger.info(f"Got NOTIFY:{notify}")
-                handler(notify)
 
 
 def get_mt_messages_to_send(limit: int, backend: Backend) -> List[Dict[str, Any]]:

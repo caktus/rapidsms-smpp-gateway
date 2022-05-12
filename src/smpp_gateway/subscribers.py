@@ -1,10 +1,13 @@
 import logging
+import select
+
+import psycopg2.extensions
 
 from django.db.models import QuerySet
 from rapidsms.router import lookup_connections, receive
 
 from smpp_gateway.models import MOMessage
-from smpp_gateway.queries import get_mo_messages_to_process, pg_listen, pg_poll
+from smpp_gateway.queries import get_mo_messages_to_process, pg_listen
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +27,7 @@ def handle_mo_messages(smses: QuerySet[MOMessage]):
     )
 
 
-def fetch_and_handle_mo_messages(notify):
-    """In response to a notification, fetch one incoming message and
-    process it.
-    """
-    smses = get_mo_messages_to_process(limit=1)
-    handle_mo_messages(smses)
-
-
-def listen_mo_messages(channel):
+def listen_mo_messages(channel: str):
     """Batch process any queued incoming messages, then listen to be notified
     of new arrivals.
     """
@@ -42,4 +37,14 @@ def listen_mo_messages(channel):
         smses = get_mo_messages_to_process(limit=100)
 
     pg_conn = pg_listen(channel)
-    pg_poll(channel, pg_conn, fetch_and_handle_mo_messages)
+
+    while True:
+        if select.select([pg_conn], [], [], 5) == ([], [], []):
+            logger.debug(f"{channel} .")
+        else:
+            pg_conn.poll()
+            while pg_conn.notifies:
+                notify = pg_conn.notifies.pop()  # type: psycopg2.extensions.Notify
+                logger.info(f"Got NOTIFY:{notify}")
+                smses = get_mo_messages_to_process(limit=1)
+                handle_mo_messages(smses)

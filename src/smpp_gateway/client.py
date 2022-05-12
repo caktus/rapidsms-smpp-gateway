@@ -59,7 +59,8 @@ class PgSmppClient(smpplib.client.Client):
     https://gist.github.com/pkese/2790749
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, notify_mo_channel: str, *args, **kwargs):
+        self.notify_mo_channel = notify_mo_channel
         self.backend = kwargs.pop("backend")
         self.submit_sm_params = kwargs.pop("submit_sm_params")
         super().__init__(*args, **kwargs)
@@ -77,7 +78,7 @@ class PgSmppClient(smpplib.client.Client):
             params=params,
             status=MOMessage.NEW,
         )
-        pg_notify("new_mo_msg")  # FIXME: Is this configurable?
+        pg_notify(self.notify_mo_channel)
 
     def _save_delivery_receipt(self, pdu, params):
         count = MTMessageStatus.objects.filter(
@@ -155,7 +156,7 @@ class PgSmppClient(smpplib.client.Client):
             for short_message in parts
         ]
 
-    def send_mt_messages(self, notify=None):
+    def send_mt_messages(self):
         smses = get_mt_messages_to_send(limit=1000, backend=self.backend)
         submit_sm_resps = []
         for sms in smses:
@@ -189,7 +190,7 @@ class PgSmppClient(smpplib.client.Client):
         while self._pg_conn.notifies:
             notify = self._pg_conn.notifies.pop()
             logger.info(f"Got NOTIFY:{notify}")
-            self.send_mt_messages(notify)
+            self.send_mt_messages()
 
     # ############### Main loop ################
 

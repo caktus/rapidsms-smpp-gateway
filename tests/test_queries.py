@@ -1,7 +1,13 @@
+import psycopg2.extensions
 import pytest
 
 from smpp_gateway.models import MOMessage, MTMessage
-from smpp_gateway.queries import get_mo_messages_to_process, get_mt_messages_to_send
+from smpp_gateway.queries import (
+    get_mo_messages_to_process,
+    get_mt_messages_to_send,
+    pg_listen,
+    pg_notify,
+)
 from tests.factories import BackendFactory, MOMessageFactory, MTMessageFactory
 
 
@@ -135,3 +141,41 @@ class TestGetMessagesToProcess(object):
                 assert message.status == MOMessage.Status.PROCESSING
             else:
                 assert message.status == MOMessage.Status.NEW
+
+
+@pytest.mark.django_db
+class TestNotifications(object):
+    def _drain_conn(self, conn: psycopg2.extensions.connection):
+        """Drain all notifications so there is no cross-talk between tests."""
+        while conn.notifies:
+            conn.notifies.pop()
+
+    def test_listen_notify_new_messages(self):
+        """`pg_notify` should publish messages that can be read by the
+        connection made from `pg_listen`.
+        """
+        listen_conn = pg_listen("test_channel")
+
+        listen_conn.poll()
+        assert len(listen_conn.notifies) == 0
+
+        for _ in range(5):
+            pg_notify("test_channel")
+
+        listen_conn.poll()
+        assert len(listen_conn.notifies) == 5
+
+        self._drain_conn(listen_conn)
+
+    def test_listen_notify_preexisting_messages(self):
+        """The connection made from `pg_listen` cannot recieve messages sent
+        before it was created.
+        """
+        for _ in range(4):
+            pg_notify("test_channel")
+
+        listen_conn = pg_listen("test_channel")
+        listen_conn.poll()
+        assert len(listen_conn.notifies) == 0
+
+        self._drain_conn(listen_conn)
