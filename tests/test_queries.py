@@ -1,8 +1,8 @@
 import pytest
 
-from smpp_gateway.models import MTMessage
-from smpp_gateway.queries import get_mt_messages_to_send
-from tests.factories import BackendFactory, MTMessageFactory
+from smpp_gateway.models import MOMessage, MTMessage
+from smpp_gateway.queries import get_mo_messages_to_process, get_mt_messages_to_send
+from tests.factories import BackendFactory, MOMessageFactory, MTMessageFactory
 
 
 @pytest.mark.django_db
@@ -78,5 +78,60 @@ class TestGetMessagesToSend(object):
                 assert message.status == MTMessage.Status.NEW
 
 
-# @pytest.mark.django_db
-# class TestGetMessagesToProcess:
+@pytest.mark.django_db
+class TestGetMessagesToProcess(object):
+    def test_empty(self):
+        """Return an empty list if there are no queued inbound messages."""
+        messages = get_mo_messages_to_process(limit=1)
+        assert messages.count() == 0
+
+    def test_partial_page(self):
+        """Return fewer than `limit` messages if appropriate."""
+        MOMessageFactory.create_batch(5)
+
+        messages = get_mo_messages_to_process(limit=100)
+
+        assert messages.count() == 5
+
+    def test_full_page(self):
+        """Return only `limit` messages if more are present."""
+        MOMessageFactory.create_batch(5)
+
+        messages = get_mo_messages_to_process(limit=3)
+
+        assert messages.count() == 3
+
+    def test_new_messages_only(self):
+        """Return only messages with status NEW."""
+        backend = BackendFactory()
+        new_messages = [MOMessageFactory(backend=backend, status=MOMessage.Status.NEW)]
+        for other_status in [
+            val for val in MOMessage.Status.values if val != MOMessage.Status.NEW
+        ]:
+            MOMessageFactory.create_batch(
+                3,
+                backend=backend,
+                status=other_status,
+            )
+        new_messages.append(
+            MOMessageFactory(backend=backend, status=MOMessage.Status.NEW)
+        )
+
+        messages = get_mo_messages_to_process(limit=10)
+
+        assert len(messages) == 2
+        assert set(messages) == set(new_messages)
+
+    def test_updates_status_to_processing(self):
+        """Returned messages should be updated to status PROCESSING."""
+        backend = BackendFactory()
+        MOMessageFactory.create_batch(5, backend=backend)
+
+        messages = get_mo_messages_to_process(limit=3)
+        returned_message_pks = {msg.pk for msg in messages}
+
+        for message in MOMessage.objects.all():
+            if message.pk in returned_message_pks:
+                assert message.status == MOMessage.Status.PROCESSING
+            else:
+                assert message.status == MOMessage.Status.NEW

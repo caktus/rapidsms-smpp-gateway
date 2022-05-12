@@ -61,15 +61,18 @@ def get_mt_messages_to_send(limit: int, backend: Backend) -> List[Dict[str, Any]
 
 
 def get_mo_messages_to_process(limit: int = 1) -> QuerySet[MOMessage]:
+    """Fetches up to `limit` incoming messages while updating their
+    status to PROCESSING.
+    """
     with transaction.atomic():
         smses = (
-            MOMessage.objects.filter(status="new")
+            MOMessage.objects.filter(status=MOMessage.Status.NEW)
             .select_related("backend")
             .select_for_update(skip_locked=True, of=("self",))[:limit]
         )
         pks = [sms.pk for sms in smses]
-        logger.debug(f"get_mo_messages_to_process: Marking {pks} as processing")
-        MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(
-            status="processing"
+        logger.debug(
+            f"get_mo_messages_to_process: Marking {pks} as {MOMessage.Status.PROCESSING.label}"
         )
+        MOMessage.objects.filter(pk__in=pks).update(status=MOMessage.Status.PROCESSING)
     return smses

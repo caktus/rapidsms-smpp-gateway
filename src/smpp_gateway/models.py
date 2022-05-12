@@ -15,18 +15,16 @@ class AbstractTimestampModel(models.Model):
 class MOMessage(AbstractTimestampModel, models.Model):
     """Mobile-originated, or inbound, message."""
 
-    NEW = "new"
-    STATUS_CHOICES = (
-        (NEW, "New"),
-        ("processing", "Processing"),
-        ("done", "Done"),
-    )
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        PROCESSING = "processing", "Processing"
+        DONE = "done", "Done"
 
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # Save the raw bytes, in case they're needed later
     short_message = models.BinaryField()
     params = JSONField()
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    status = models.CharField(max_length=32, choices=Status.choices)
 
     @cached_property
     def decoded_short_message(self) -> str:
