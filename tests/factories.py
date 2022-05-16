@@ -1,10 +1,11 @@
 import factory
+import smpplib.consts
 
 from django.utils.timezone import now
 from factory.django import DjangoModelFactory
 from rapidsms.models import Backend
 
-from smpp_gateway.models import MOMessage, MTMessage
+from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 
 
 class BackendFactory(DjangoModelFactory):
@@ -36,3 +37,17 @@ class MTMessageFactory(DjangoModelFactory):
     short_message = factory.Faker("sentence")
     params = {}
     status = MTMessage.Status.NEW
+
+
+class MTMessageStatusFactory(DjangoModelFactory):
+    class Meta:
+        model = MTMessageStatus
+
+    create_time = factory.LazyFunction(now)
+    modify_time = factory.LazyFunction(now)
+    mt_message = factory.SubFactory(MTMessageFactory)
+    backend = factory.LazyAttribute(lambda o: o.mt_message.backend)
+    sequence_number = factory.Sequence(lambda n: n + 1)
+    command_status = smpplib.consts.SMPP_ESME_ROK
+    message_id = factory.Sequence(lambda n: n + 1)
+    delivery_report = b""

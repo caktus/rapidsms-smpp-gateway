@@ -41,7 +41,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--submit-sm-params",
-            default=os.environ.get("SMPPLIB_SUBMIT_SM_PARAMS"),
+            default=os.environ.get("SMPPLIB_SUBMIT_SM_PARAMS", r"{}"),
         )
         parser.add_argument(
             "--database-url",

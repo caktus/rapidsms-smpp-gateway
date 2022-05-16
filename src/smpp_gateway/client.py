@@ -2,12 +2,16 @@ import logging
 import select
 import socket
 
+from typing import Dict
+
 import smpplib
 import smpplib.client
 import smpplib.consts
 import smpplib.gsm
 
 from django.utils import timezone
+from rapidsms.models import Backend
+from smpplib.command import DeliverSM
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 from smpp_gateway.queries import get_mt_messages_to_send, pg_listen, pg_notify
@@ -59,16 +63,26 @@ class PgSmppClient(smpplib.client.Client):
     https://gist.github.com/pkese/2790749
     """
 
-    def __init__(self, notify_mo_channel: str, *args, **kwargs):
+    def __init__(
+        self,
+        notify_mo_channel: str,
+        backend: Backend,
+        submit_sm_params: Dict,
+        *args,
+        **kwargs,
+    ):
         self.notify_mo_channel = notify_mo_channel
-        self.backend = kwargs.pop("backend")
-        self.submit_sm_params = kwargs.pop("submit_sm_params")
+        self.backend = backend
+        self.submit_sm_params = submit_sm_params
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
 
     # ############### Handlers ################
 
-    def _create_mo_message(self, pdu, params):
+    def _create_mo_message(self, pdu: DeliverSM, params):
+        """We received a message. Insert into DB and notify the
+        listen_mo_messages process.
+        """
         now = timezone.now()
         MOMessage.objects.create(
             create_time=now,
@@ -76,13 +90,18 @@ class PgSmppClient(smpplib.client.Client):
             backend=self.backend,
             short_message=pdu.short_message,
             params=params,
-            status=MOMessage.NEW,
+            status=MOMessage.Status.NEW,
         )
         pg_notify(self.notify_mo_channel)
 
-    def _save_delivery_receipt(self, pdu, params):
+    def _save_delivery_receipt(self, pdu: DeliverSM, params):
+        """We received an update that an outbound message was delivered.
+
+        Mark it as delivered.
+        """
         count = MTMessageStatus.objects.filter(
-            backend=self.backend, message_id=params["receipted_message_id"]
+            backend=self.backend,
+            message_id=params["receipted_message_id"],
         ).update(
             modify_time=timezone.now(),
             delivery_report=pdu.short_message,
@@ -98,10 +117,11 @@ class PgSmppClient(smpplib.client.Client):
             mtmessagestatus__message_id=params["receipted_message_id"],
         ).update(
             modify_time=timezone.now(),
-            status="delivered",
+            status=MTMessage.Status.DELIVERED,
         )
 
-    def message_received_handler(self, pdu):
+    def message_received_handler(self, pdu: DeliverSM):
+        """Called by smpplib base Client."""
         mo_params = decoded_params(pdu)
         if mo_params.get("receipted_message_id"):
             self._save_delivery_receipt(pdu, mo_params)

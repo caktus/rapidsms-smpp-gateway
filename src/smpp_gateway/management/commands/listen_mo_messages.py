@@ -4,7 +4,7 @@ from smpp_gateway.subscribers import listen_mo_messages
 
 
 class Command(BaseCommand):
-    help = "Listen for MO messages."
+    help = "Receive inbound MO messages and pass them to RapidSMS."
 
     def add_arguments(self, parser):
         parser.add_argument("--channel", default="new_mo_msg")
