@@ -11,7 +11,7 @@ import smpplib.gsm
 
 from django.utils import timezone
 from rapidsms.models import Backend
-from smpplib.command import DeliverSM
+from smpplib.command import Command, DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 from smpp_gateway.queries import get_mt_messages_to_send, pg_listen, pg_notify
@@ -79,24 +79,16 @@ class PgSmppClient(smpplib.client.Client):
 
     # ############### Handlers ################
 
-    def _create_mo_message(self, pdu: DeliverSM, params):
-        """We received a message. Insert into DB and notify the
-        listen_mo_messages process.
-        """
-        now = timezone.now()
-        MOMessage.objects.create(
-            create_time=now,
-            modify_time=now,
-            backend=self.backend,
-            short_message=pdu.short_message,
-            params=params,
-            status=MOMessage.Status.NEW,
-        )
-        pg_notify(self.notify_mo_channel)
+    def message_received_handler(self, pdu: DeliverSM):
+        """Called by smpplib base Client."""
+        mo_params = decoded_params(pdu)
+        if mo_params.get("receipted_message_id"):
+            self._save_delivery_receipt(pdu, mo_params)
+        else:
+            self._create_mo_message(pdu, mo_params)
 
     def _save_delivery_receipt(self, pdu: DeliverSM, params):
         """We received an update that an outbound message was delivered.
-
         Mark it as delivered.
         """
         count = MTMessageStatus.objects.filter(
@@ -120,15 +112,23 @@ class PgSmppClient(smpplib.client.Client):
             status=MTMessage.Status.DELIVERED,
         )
 
-    def message_received_handler(self, pdu: DeliverSM):
-        """Called by smpplib base Client."""
-        mo_params = decoded_params(pdu)
-        if mo_params.get("receipted_message_id"):
-            self._save_delivery_receipt(pdu, mo_params)
-        else:
-            self._create_mo_message(pdu, mo_params)
+    def _create_mo_message(self, pdu: DeliverSM, params):
+        """We received a message. Insert into DB and notify the
+        listen_mo_messages process.
+        """
+        now = timezone.now()
+        MOMessage.objects.create(
+            create_time=now,
+            modify_time=now,
+            backend=self.backend,
+            short_message=pdu.short_message,
+            params=params,
+            status=MOMessage.Status.NEW,
+        )
+        pg_notify(self.notify_mo_channel)
 
-    def message_sent_handler(self, pdu):
+    def message_sent_handler(self, pdu: SubmitSMResp):
+        """Called by smpplib base Client."""
         params = decoded_params(pdu)
         count = MTMessageStatus.objects.filter(
             backend=self.backend,
@@ -144,7 +144,10 @@ class PgSmppClient(smpplib.client.Client):
                 f"status={pdu.status}, message_id={params['message_id']}"
             )
 
-    def error_pdu_handler(self, pdu):
+    def error_pdu_handler(self, pdu: Command):
+        """Called by smpplib base Client when incoming PDU has status set to
+        anything other than OK.
+        """
         if pdu.command == "submit_sm_resp":
             # update MTMessageStatus record with the error
             self.message_sent_handler(pdu)
@@ -158,23 +161,12 @@ class PgSmppClient(smpplib.client.Client):
 
     # ############### Listen for and send MT Messages ################
 
-    def split_and_send_message(self, message, **kwargs):
-        """
-        Splits and sends the given message, returning the underlying PDUs.
-        The "source_addr" and "destination_addr" keyword arguments are required
-        by python-smpplib.
-        """
-        # Two parts, UCS2, SMS with UDH
-        parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
-        return [
-            self.send_message(
-                short_message=short_message,
-                data_coding=data_coding,
-                esm_class=esm_class,
-                **kwargs,
-            )
-            for short_message in parts
-        ]
+    def receive_pg_notifies(self):
+        self._pg_conn.poll()
+        while self._pg_conn.notifies:
+            notify = self._pg_conn.notifies.pop()
+            logger.info(f"Got NOTIFY:{notify}")
+            self.send_mt_messages()
 
     def send_mt_messages(self):
         smses = get_mt_messages_to_send(limit=1000, backend=self.backend)
@@ -200,17 +192,28 @@ class PgSmppClient(smpplib.client.Client):
             )
         pks = [sms["id"] for sms in smses]
         MTMessage.objects.filter(pk__in=pks).update(
-            status="sent",
+            status=MTMessage.Status.SENT,
             modify_time=timezone.now(),
         )
         MTMessageStatus.objects.bulk_create(submit_sm_resps)
 
-    def receive_pg_notifies(self):
-        self._pg_conn.poll()
-        while self._pg_conn.notifies:
-            notify = self._pg_conn.notifies.pop()
-            logger.info(f"Got NOTIFY:{notify}")
-            self.send_mt_messages()
+    def split_and_send_message(self, message, **kwargs):
+        """
+        Splits and sends the given message, returning the underlying PDUs.
+        The "source_addr" and "destination_addr" keyword arguments are required
+        by python-smpplib.
+        """
+        # Two parts, UCS2, SMS with UDH
+        parts, data_coding, esm_class = smpplib.gsm.make_parts(message)
+        return [
+            self.send_message(
+                short_message=short_message,
+                data_coding=data_coding,
+                esm_class=esm_class,
+                **kwargs,
+            )
+            for short_message in parts
+        ]
 
     # ############### Main loop ################
 

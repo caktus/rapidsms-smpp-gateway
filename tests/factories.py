@@ -49,5 +49,5 @@ class MTMessageStatusFactory(DjangoModelFactory):
     backend = factory.LazyAttribute(lambda o: o.mt_message.backend)
     sequence_number = factory.Sequence(lambda n: n + 1)
     command_status = smpplib.consts.SMPP_ESME_ROK
-    message_id = factory.Sequence(lambda n: n + 1)
+    message_id = ""
     delivery_report = b""

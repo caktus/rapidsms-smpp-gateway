@@ -1,6 +1,7 @@
 import pytest
 
-from smpplib.command import DeliverSM
+from smpplib import consts as smpplib_consts
+from smpplib.command import DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage
 from smpp_gateway.queries import pg_listen
@@ -58,12 +59,14 @@ class TestMessageReceivedHandler(object):
             {},
         )
         outbound_msg = MTMessageFactory(status=MTMessage.Status.SENT, backend=backend)
-        outbound_msg_status = MTMessageStatusFactory(mt_message=outbound_msg)
+        outbound_msg_status = MTMessageStatusFactory(
+            mt_message=outbound_msg, message_id="abcdefg"
+        )
 
         pdu = DeliverSM("deliver_sm")
         pdu.short_message = b"this is a delivery receipt"
         pdu.source_addr = "111.222.333.444"
-        pdu.receipted_message_id = outbound_msg_status.message_id
+        pdu.receipted_message_id = "abcdefg"
 
         listen_conn = pg_listen("notify_mo_channel")
 
@@ -83,3 +86,32 @@ class TestMessageReceivedHandler(object):
         )
 
         drain_conn(listen_conn)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_message_sent_handler():
+    """The associated MTMessageStatus should be updated with the submission
+    status and message_id.
+    """
+    backend = BackendFactory()
+    client = get_smpplib_client(
+        "127.0.0.1",
+        8000,
+        "notify_mo_channel",
+        backend,
+        {},
+    )
+    outbound_msg = MTMessageFactory(status=MTMessage.Status.SENT, backend=backend)
+    outbound_msg_status = MTMessageStatusFactory(mt_message=outbound_msg)
+
+    pdu = SubmitSMResp("submit_sm_resp")
+    pdu.sequence = outbound_msg_status.sequence_number
+    pdu.status = smpplib_consts.SMPP_ESME_RSUBMITFAIL
+    pdu.message_id = "qwerty"
+
+    client.message_sent_handler(pdu)
+
+    outbound_msg_status.refresh_from_db()
+
+    assert outbound_msg_status.command_status == smpplib_consts.SMPP_ESME_RSUBMITFAIL
+    assert outbound_msg_status.message_id == "qwerty"
