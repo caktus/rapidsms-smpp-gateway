@@ -13,18 +13,23 @@ logger = logging.getLogger(__name__)
 
 
 def handle_mo_messages(smses: QuerySet[MOMessage]):
-    for sms in smses:
-        connection = lookup_connections(
-            backend=sms.backend, identities=[sms.params["source_addr"]]
-        )[0]
-        fields = {
-            "to_addr": sms.params["destination_addr"],
-            "from_addr": sms.params["source_addr"],
-        }
-        receive(sms.decoded_short_message, connection, fields=fields)
-    MOMessage.objects.filter(pk__in=[sms.pk for sms in smses]).update(
-        status=MOMessage.Status.DONE
-    )
+    received_smses = []
+    try:
+        for sms in smses:
+            connection = lookup_connections(
+                backend=sms.backend, identities=[sms.params["source_addr"]]
+            )[0]
+            fields = {
+                "to_addr": sms.params["destination_addr"],
+                "from_addr": sms.params["source_addr"],
+            }
+            receive(sms.decoded_short_message, connection, fields=fields)
+            received_smses.append(sms)
+    finally:
+        if received_smses:
+            MOMessage.objects.filter(pk__in=[sms.pk for sms in received_smses]).update(
+                status=MOMessage.Status.DONE
+            )
 
 
 def listen_mo_messages(channel: str):

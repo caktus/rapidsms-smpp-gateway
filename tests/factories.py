@@ -3,6 +3,7 @@ import smpplib.consts
 
 from django.utils.timezone import now
 from factory.django import DjangoModelFactory
+from faker import Faker
 from rapidsms.models import Backend
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
@@ -22,8 +23,15 @@ class MOMessageFactory(DjangoModelFactory):
     create_time = factory.LazyFunction(now)
     modify_time = factory.LazyFunction(now)
     backend = factory.SubFactory(BackendFactory)
-    short_message = factory.Faker("binary", length=256)
-    params = {}
+    short_message = factory.LazyFunction(
+        lambda: Faker().text(max_nb_chars=256).encode("ascii")
+    )
+    params = factory.Dict(
+        {
+            "destination_addr": factory.Faker("ipv4"),
+            "source_addr": factory.Faker("ipv4"),
+        }
+    )
     status = MOMessage.Status.NEW
 
 
