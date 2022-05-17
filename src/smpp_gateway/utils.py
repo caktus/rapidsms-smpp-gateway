@@ -2,7 +2,7 @@ import base64
 import itertools
 import string
 
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 import smpplib
 
@@ -25,7 +25,7 @@ def grouper(iterable, n):
         yield group
 
 
-def maybe_decode(value: Union[bytes, str]):
+def maybe_decode(value):
     if isinstance(value, bytes):
         if all(b in ASCII_PRINTABLE_BYTES for b in value):
             return value.decode("ascii")

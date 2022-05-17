@@ -16,7 +16,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "notify_mo_channel",
-            help="Name of postgres channel to NOTIFY for each incoming message.",
+            help="Name of Postgres channel to NOTIFY for each incoming message.",
             default="new_mo_msg",
         )
         parser.add_argument(

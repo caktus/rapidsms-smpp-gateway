@@ -21,8 +21,6 @@ def pg_listen(channel: str) -> psycopg2.extensions.connection:
     >>> conn.poll()
     >>> for notify in conn.notifies:
     >>>    print(f"I got a notification: {notify}")
-
-    or with helper `pg_poll()`.
     """
     with connection.cursor() as cursor:
         pg_conn = connection.connection
