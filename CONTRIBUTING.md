@@ -4,13 +4,11 @@ The following is a set of guidelines for contributing to rapidsms-smpp-gateway
 on GitHub. Use your best judgement, and feel free to propose changes to this
 document in a pull request.
 
-
 #### Table of contents
 
-* [Local development](#local-development)
-* [Tests](#tests)
-* [Install an editable version in another project](#install-an-editable-version-in-another-project)
-
+- [Local development](#local-development)
+- [Tests](#tests)
+- [Install an editable version in another project](#install-an-editable-version-in-another-project)
 
 ## Local development
 
@@ -42,13 +40,26 @@ is in order:
 pre-commit install
 ```
 
-
 ## Tests
 
 ```shell
-pytest
-```
+# provide a postgres instance, optionally in a docker container
+docker run \
+    --detach \
+    --rm \
+    --name=smpp-test-db \
+    -p 5432:5432 \
+    -e POSTGRES_DB=test_database \
+    -e POSTGRES_USER=test_user \
+    -e POSTGRES_PASSWORD=test_password \
+    postgres:10.18
+# wait for DB to start up
 
+pytest
+
+# tear down test DB if desired
+docker stop smpp-test-db
+```
 
 ## Install an editable version in another project
 

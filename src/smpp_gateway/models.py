@@ -1,4 +1,3 @@
-from django.contrib.postgres.fields import JSONField
 from django.db import connection, models
 from django.utils.functional import cached_property
 from rapidsms.models import Backend
@@ -13,23 +12,23 @@ class AbstractTimestampModel(models.Model):
 
 
 class MOMessage(AbstractTimestampModel, models.Model):
-    NEW = "new"
-    STATUS_CHOICES = (
-        (NEW, "New"),
-        ("processing", "Processing"),
-        ("done", "Done"),
-    )
+    """Mobile-originated, or inbound, message."""
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        PROCESSING = "processing", "Processing"
+        DONE = "done", "Done"
 
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # Save the raw bytes, in case they're needed later
     short_message = models.BinaryField()
-    params = JSONField()
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    params = models.JSONField()
+    status = models.CharField(max_length=32, choices=Status.choices)
 
     @cached_property
-    def decoded_short_message(self):
+    def decoded_short_message(self) -> str:
         data_coding = self.params.get("data_coding", 0)
-        short_message = self.short_message.tobytes()
+        short_message = self.short_message.tobytes()  # type: bytes
         if data_coding == 0:
             return short_message.decode("ascii")
         if data_coding == 8:
@@ -46,24 +45,24 @@ class MOMessage(AbstractTimestampModel, models.Model):
 
 
 class MTMessage(AbstractTimestampModel, models.Model):
-    NEW = "new"
-    STATUS_CHOICES = (
-        (NEW, "New"),
-        ("sending", "Sending"),
-        ("sent", "Sent"),
-        ("delivered", "Delivered"),
-        ("error", "Error"),
-    )
+    """Mobile-terminated, or outbound, message."""
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        SENDING = "sending", "Sending"
+        SENT = "sent", "Sent"
+        DELIVERED = "delivered", "Delivered"
+        ERROR = "error", "Error"
 
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # SMPP client will decide how to encode it
     short_message = models.TextField()
-    params = JSONField()
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    params = models.JSONField()
+    status = models.CharField(max_length=32, choices=Status.choices)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        if self.status == "new":
+        if self.status == MTMessage.Status.NEW:
             with connection.cursor() as curs:
                 curs.execute(f"NOTIFY {self.backend.name}")
 
@@ -75,23 +74,27 @@ class MTMessage(AbstractTimestampModel, models.Model):
 
 
 class MTMessageStatus(AbstractTimestampModel, models.Model):
-    """
-    Database table for collecting the various information about MT messages
-    we sent, including:
-    - The initial sequence_number established by us when the message was sent
-    - The message_id we receive from the MC (via its submit_sm_resp)
-    - The delivery_report we receive from the MC (via its deliver_sm)
-    """
+    """Metadata and status information about outbound messages."""
 
     mt_message = models.ForeignKey(MTMessage, on_delete=models.CASCADE)
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
-    sequence_number = models.IntegerField()
+    sequence_number = models.IntegerField(
+        help_text="The initial sequence_number established by us when the message was sent."
+    )
     command_status = models.IntegerField(null=True)
-    message_id = models.CharField(max_length=255, blank=True, default="")
-    delivery_report = models.BinaryField(null=True)
+    message_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="The message_id we receive from the MC (via its submit_sm_resp).",
+    )
+    delivery_report = models.BinaryField(
+        null=True,
+        help_text="The delivery_report we receive from the MC (via its deliver_sm).",
+    )
 
     @cached_property
-    def delivery_report_as_bytes(self):
+    def delivery_report_as_bytes(self) -> bytes:
         return self.delivery_report.tobytes()
 
     def __str__(self):

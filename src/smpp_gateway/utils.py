@@ -2,6 +2,10 @@ import base64
 import itertools
 import string
 
+from typing import Any, Dict
+
+import smpplib
+
 ASCII_PRINTABLE_BYTES = {ord(c) for c in string.printable}
 
 
@@ -30,5 +34,5 @@ def maybe_decode(value):
     return value
 
 
-def decoded_params(pdu):
+def decoded_params(pdu: smpplib.command.Command) -> Dict[str, Any]:
     return {key: maybe_decode(getattr(pdu, key)) for key in pdu.params.keys()}
