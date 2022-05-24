@@ -28,8 +28,8 @@ class MOMessageFactory(DjangoModelFactory):
     )
     params = factory.Dict(
         {
-            "destination_addr": factory.Faker("ipv4"),
-            "source_addr": factory.Faker("ipv4"),
+            "destination_addr": "+46166371877",
+            "source_addr": "+46166371876",
         }
     )
     status = MOMessage.Status.NEW

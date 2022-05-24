@@ -27,7 +27,7 @@ class TestMessageReceivedHandler(object):
 
         pdu = DeliverSM("deliver_sm")
         pdu.short_message = b"this is a short message"
-        pdu.source_addr = "111.222.333.444"
+        pdu.source_addr = "+46166371876"
 
         listen_conn = pg_listen("notify_mo_channel")
 
@@ -41,7 +41,7 @@ class TestMessageReceivedHandler(object):
         msg = MOMessage.objects.get()
         assert msg.backend == backend
         assert msg.short_message.tobytes() == pdu.short_message
-        assert msg.params["source_addr"] == "111.222.333.444"
+        assert msg.params["source_addr"] == "+46166371876"
         assert msg.status == MOMessage.Status.NEW
 
         drain_conn(listen_conn)
@@ -65,7 +65,7 @@ class TestMessageReceivedHandler(object):
 
         pdu = DeliverSM("deliver_sm")
         pdu.short_message = b"this is a delivery receipt"
-        pdu.source_addr = "111.222.333.444"
+        pdu.source_addr = "+46166371876"
         pdu.receipted_message_id = "abcdefg"
 
         listen_conn = pg_listen("notify_mo_channel")
