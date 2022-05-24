@@ -8,7 +8,6 @@ from smpp_gateway.queries import (
     pg_notify,
 )
 from tests.factories import BackendFactory, MOMessageFactory, MTMessageFactory
-from tests.utils import drain_conn
 
 
 @pytest.mark.django_db
@@ -160,8 +159,6 @@ class TestNotifications(object):
         listen_conn.poll()
         assert len(listen_conn.notifies) == 5
 
-        drain_conn(listen_conn)
-
     def test_listen_notify_preexisting_messages(self):
         """The connection made from `pg_listen` cannot recieve messages sent
         before it was created.
@@ -172,5 +169,3 @@ class TestNotifications(object):
         listen_conn = pg_listen("test_channel")
         listen_conn.poll()
         assert len(listen_conn.notifies) == 0
-
-        drain_conn(listen_conn)

@@ -7,7 +7,6 @@ from smpp_gateway.models import MOMessage, MTMessage
 from smpp_gateway.queries import pg_listen
 from smpp_gateway.smpp import get_smpplib_client
 from tests.factories import BackendFactory, MTMessageFactory, MTMessageStatusFactory
-from tests.utils import drain_conn
 
 
 @pytest.mark.django_db(transaction=True)
@@ -43,8 +42,6 @@ class TestMessageReceivedHandler(object):
         assert msg.short_message.tobytes() == pdu.short_message
         assert msg.params["source_addr"] == "+46166371876"
         assert msg.status == MOMessage.Status.NEW
-
-        drain_conn(listen_conn)
 
     def test_received_message_receipt(self):
         """When a message is received that is a receipt acknowledgement,
@@ -84,8 +81,6 @@ class TestMessageReceivedHandler(object):
             outbound_msg_status.delivery_report.tobytes()
             == b"this is a delivery receipt"
         )
-
-        drain_conn(listen_conn)
 
 
 @pytest.mark.django_db(transaction=True)
