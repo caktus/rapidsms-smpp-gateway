@@ -1,4 +1,3 @@
-from django.contrib.postgres.fields import JSONField
 from django.db import connection, models
 from django.utils.functional import cached_property
 from rapidsms.models import Backend
@@ -23,7 +22,7 @@ class MOMessage(AbstractTimestampModel, models.Model):
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # Save the raw bytes, in case they're needed later
     short_message = models.BinaryField()
-    params = JSONField()
+    params = models.JSONField()
     status = models.CharField(max_length=32, choices=Status.choices)
 
     @cached_property
@@ -58,7 +57,7 @@ class MTMessage(AbstractTimestampModel, models.Model):
     backend = models.ForeignKey(Backend, on_delete=models.PROTECT)
     # SMPP client will decide how to encode it
     short_message = models.TextField()
-    params = JSONField()
+    params = models.JSONField()
     status = models.CharField(max_length=32, choices=Status.choices)
 
     def save(self, *args, **kwargs):
