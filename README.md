@@ -2,7 +2,6 @@
 
 A [RapidSMS](https://rapidsms.readthedocs.io/en/latest/) SMPP gateway.
 
-
 ## Management commands
 
 ### `smpp_client`
@@ -24,7 +23,6 @@ export SMPPLIB_SYSTEM_ID=smppclient1
 export SMPPLIB_PASSWORD=password
 export SMPPLIB_SUBMIT_SM_PARAMS='{"foo": "bar"}'
 ```
-
 
 ### `listen_mo_messages`
 
