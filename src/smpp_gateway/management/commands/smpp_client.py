@@ -15,13 +15,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "notify_mo_channel",
-            help="Name of Postgres channel to NOTIFY for each incoming message.",
-            default="new_mo_msg",
-        )
-        parser.add_argument(
             "backend_name",
             help="RapidSMS backend name. Will be created if it doesn't exist.",
+        )
+        parser.add_argument(
+            "--notify-mo-channel",
+            help="Name of Postgres channel to NOTIFY for each incoming message.",
+            default="new_mo_msg",
         )
         parser.add_argument(
             "--host",
@@ -38,6 +38,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "--password",
             default=os.environ.get("SMPPLIB_PASSWORD"),
+        )
+        parser.add_argument(
+            "--system-type",
+            default=os.environ.get("SMPPLIB_SYSTEM_TYPE"),
+        )
+        parser.add_argument(
+            "--interface-version",
+            default=os.environ.get("SMPPLIB_INTERFACE_VERSION"),
         )
         parser.add_argument(
             "--submit-sm-params",

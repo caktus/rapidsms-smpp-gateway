@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Dict
+from typing import Dict, Optional
 
 from django.db import connection as db_conn
 from rapidsms.models import Backend
@@ -31,9 +31,20 @@ def get_smpplib_client(
     return client
 
 
-def smpplib_main_loop(client: PgSmppClient, system_id: str, password: str):
+def smpplib_main_loop(
+    client: PgSmppClient,
+    system_id: str,
+    password: str,
+    interface_version: Optional[str],
+    system_type: Optional[str],
+):
     client.connect()
-    client.bind_transceiver(system_id=system_id, password=password)
+    client.bind_transceiver(
+        system_id=system_id,
+        password=password,
+        interface_version=interface_version,
+        system_type=system_type,
+    )
     client.listen()
 
 
@@ -46,4 +57,10 @@ def start_smpp_client(options):
         backend,
         json.loads(options["submit_sm_params"]),
     )
-    smpplib_main_loop(client, options["system_id"], options["password"])
+    smpplib_main_loop(
+        client,
+        options["system_id"],
+        options["password"],
+        options["interface_version"],
+        options["system_type"],
+    )
