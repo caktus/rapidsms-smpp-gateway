@@ -1,5 +1,6 @@
 import logging
 import select
+import signal
 import socket
 
 from typing import Dict
@@ -7,6 +8,7 @@ from typing import Dict
 import smpplib
 import smpplib.client
 import smpplib.consts
+import smpplib.exceptions
 import smpplib.gsm
 
 from django.utils import timezone
@@ -63,6 +65,8 @@ class PgSmppClient(smpplib.client.Client):
     https://gist.github.com/pkese/2790749
     """
 
+    _received_exit_signal = False
+
     def __init__(
         self,
         notify_mo_channel: str,
@@ -71,11 +75,17 @@ class PgSmppClient(smpplib.client.Client):
         *args,
         **kwargs,
     ):
+        signal.signal(signal.SIGINT, self._exit_gracefully)
+        signal.signal(signal.SIGTERM, self._exit_gracefully)
         self.notify_mo_channel = notify_mo_channel
         self.backend = backend
         self.submit_sm_params = submit_sm_params
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
+
+    def _exit_gracefully(self, sig_num, stack_frame):
+        logger.info(f"Got signal {sig_num}, scheduling exit")
+        self._received_exit_signal = True
 
     # ############### Handlers ################
 
@@ -169,7 +179,7 @@ class PgSmppClient(smpplib.client.Client):
             self.send_mt_messages()
 
     def send_mt_messages(self):
-        smses = get_mt_messages_to_send(limit=1000, backend=self.backend)
+        smses = get_mt_messages_to_send(limit=100, backend=self.backend)
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -240,3 +250,20 @@ class PgSmppClient(smpplib.client.Client):
                     self.read_once(ignore_error_codes, auto_send_enquire_link)
                 else:
                     self.receive_pg_notifies()
+            if self._received_exit_signal:
+                self.logger.info("Got exit signal, leaving listen loop")
+                self.safe_disconnect()
+                break
+
+    def safe_disconnect(self):
+        if self._socket is not None:
+            try:
+                self.logger.info("Unbinding...")
+                self.unbind()
+            except:
+                self.logger.exception("Ignoring exception during unbind")
+            try:
+                # Disconnect writes its own "Disconnecting..." message
+                self.disconnect()
+            except:
+                self.logger.exception("Ignoring exception during disconnect")
