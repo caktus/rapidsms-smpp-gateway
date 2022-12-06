@@ -19,6 +19,8 @@ class MOMessageAdmin(admin.ModelAdmin):
 class MTMessageStatusInline(admin.TabularInline):
     model = MTMessageStatus
     readonly_fields = (
+        "create_time",
+        "modify_time",
         "backend",
         "sequence_number",
         "command_status",
@@ -29,9 +31,10 @@ class MTMessageStatusInline(admin.TabularInline):
     extra = 0
 
 
-class CommandListListFilter(admin.SimpleListFilter):
+class MTMessageCommandStatusListFilter(admin.SimpleListFilter):
     title = "command status"
     parameter_name = "command_status"
+    path_to_parameter = "mtmessagestatus__command_status"
 
     def lookups(self, request, model_admin):
         """
@@ -44,9 +47,11 @@ class CommandListListFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         """
-        Returns the filtered queryset by mtmessagestatus.command_status
+        Returns the filtered queryset by command_status.
         """
-        return queryset.filter(mtmessagestatus__command_status=self.value())
+        if self.value():
+            return queryset.filter(**{self.path_to_parameter: self.value()})
+        return queryset
 
 
 @admin.register(MTMessage)
@@ -60,7 +65,29 @@ class MTMessageAdmin(admin.ModelAdmin):
     list_filter = (
         "status",
         "backend",
-        CommandListListFilter,
+        MTMessageCommandStatusListFilter,
     )
+    search_fields = ("mtmessagestatus__sequence_number",)
     ordering = ("-create_time",)
     inlines = (MTMessageStatusInline,)
+
+
+class MTMessageStatusCommandStatusListFilter(MTMessageCommandStatusListFilter):
+    path_to_parameter = "command_status"
+
+
+@admin.register(MTMessageStatus)
+class MTMessageStatusAdmin(admin.ModelAdmin):
+    list_display = (
+        "sequence_number",
+        "backend",
+        "message_id",
+        "command_status",
+        "create_time",
+    )
+    list_filter = (
+        "backend",
+        MTMessageStatusCommandStatusListFilter,
+    )
+    search_fields = ("sequence_number",)
+    ordering = ("-create_time",)

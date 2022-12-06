@@ -120,6 +120,7 @@ class MTMessageStatus(AbstractTimestampModel, models.Model):
 
     class Meta:
         verbose_name = _("mobile-terminated message status")
+        verbose_name_plural = _("mobile-terminated message statuses")
         constraints = [
             models.UniqueConstraint(
                 fields=["backend", "sequence_number"], name="unique_seq_num"
