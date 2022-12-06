@@ -2,6 +2,7 @@ from django.db import connection, models
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from rapidsms.models import Backend
+from smpplib.consts import DESCRIPTIONS
 
 
 class AbstractTimestampModel(models.Model):
@@ -81,6 +82,7 @@ class MTMessage(AbstractTimestampModel, models.Model):
 class MTMessageStatus(AbstractTimestampModel, models.Model):
     """Metadata and status information about outbound messages."""
 
+    COMMAND_STATUS_CHOICES = list(DESCRIPTIONS.items())
     mt_message = models.ForeignKey(
         MTMessage, on_delete=models.CASCADE, verbose_name=_("mt message")
     )
@@ -93,7 +95,9 @@ class MTMessageStatus(AbstractTimestampModel, models.Model):
             "The initial sequence_number established by us when the message was sent."
         ),
     )
-    command_status = models.IntegerField(_("command status"), null=True)
+    command_status = models.IntegerField(
+        _("command status"), null=True, choices=COMMAND_STATUS_CHOICES
+    )
     message_id = models.CharField(
         _("message id"),
         max_length=255,
