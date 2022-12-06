@@ -1,3 +1,5 @@
+from multiprocessing.pool import ThreadPool
+
 import pytest
 
 from smpp_gateway.models import MOMessage, MTMessage
@@ -140,6 +142,53 @@ class TestGetMessagesToProcess(object):
                 assert message.status == MOMessage.Status.PROCESSING
             else:
                 assert message.status == MOMessage.Status.NEW
+
+
+@pytest.mark.django_db(transaction=True)
+class TestConcurrency(object):
+    def test_get_mo_messages_concurrently(self):
+        """
+        Multiple concurrent calls to get_mo_messages_to_process()
+        fetch a given message only once.
+        """
+        message_count = 50
+        backend = BackendFactory()
+        new_messages = MOMessageFactory.create_batch(
+            message_count,
+            backend=backend,
+            status=MOMessage.Status.NEW,
+        )
+
+        def get_one_message(_):
+            return get_mo_messages_to_process(limit=1)[0]
+
+        pool = ThreadPool(processes=10)
+        messages = pool.map(get_one_message, range(message_count))
+
+        assert len(messages) == message_count
+        assert set(messages) == set(new_messages)
+
+    def test_get_mt_messages_concurrently(self):
+        """
+        Multiple concurrent calls to get_mt_messages_to_send()
+        fetch a given message only once.
+        """
+        message_count = 50
+        backend = BackendFactory()
+        new_messages = MTMessageFactory.create_batch(
+            message_count,
+            backend=backend,
+            status=MTMessage.Status.NEW,
+        )
+
+        def get_one_message(_):
+            return get_mt_messages_to_send(limit=1, backend=backend)[0]
+
+        pool = ThreadPool(processes=10)
+        messages = pool.map(get_one_message, range(message_count))
+
+        assert len(messages) == message_count
+        assert {msg["id"] for msg in messages} == {msg.id for msg in new_messages}
 
 
 @pytest.mark.django_db(transaction=True)
