@@ -40,7 +40,7 @@ class CommandListListFilter(admin.SimpleListFilter):
         statuses = MTMessageStatus.objects.values_list(
             "command_status", flat=True
         ).distinct()
-        return [(status, DESCRIPTIONS[status]) for status in statuses]
+        return [(status, DESCRIPTIONS.get(status, '')) for status in statuses]
 
     def queryset(self, request, queryset):
         """
