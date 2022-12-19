@@ -1,6 +1,5 @@
 import logging
 import select
-import signal
 import socket
 
 from typing import Dict
@@ -17,7 +16,7 @@ from smpplib.command import Command, DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 from smpp_gateway.queries import get_mt_messages_to_send, pg_listen, pg_notify
-from smpp_gateway.utils import decoded_params
+from smpp_gateway.utils import decoded_params, set_exit_signals
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +64,6 @@ class PgSmppClient(smpplib.client.Client):
     https://gist.github.com/pkese/2790749
     """
 
-    _received_exit_signal = False
-
     def __init__(
         self,
         notify_mo_channel: str,
@@ -75,17 +72,12 @@ class PgSmppClient(smpplib.client.Client):
         *args,
         **kwargs,
     ):
-        signal.signal(signal.SIGINT, self._exit_gracefully)
-        signal.signal(signal.SIGTERM, self._exit_gracefully)
+        self.exit_signal_received = set_exit_signals()
         self.notify_mo_channel = notify_mo_channel
         self.backend = backend
         self.submit_sm_params = submit_sm_params
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
-
-    def _exit_gracefully(self, sig_num, stack_frame):
-        logger.info(f"Got signal {sig_num}, scheduling exit")
-        self._received_exit_signal = True
 
     # ############### Handlers ################
 
@@ -228,6 +220,7 @@ class PgSmppClient(smpplib.client.Client):
     # ############### Main loop ################
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
+        self.logger.info("Entering main listen loop")
         # Look for and send up to 100 messages on start up
         self.send_mt_messages()
         while True:
@@ -250,10 +243,10 @@ class PgSmppClient(smpplib.client.Client):
                     self.read_once(ignore_error_codes, auto_send_enquire_link)
                 else:
                     self.receive_pg_notifies()
-            if self._received_exit_signal:
+            if self.exit_signal_received():
                 self.logger.info("Got exit signal, leaving listen loop")
                 self.safe_disconnect()
-                break
+                return
 
     def safe_disconnect(self):
         if self._socket is not None:
