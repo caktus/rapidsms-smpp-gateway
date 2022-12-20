@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "smpp_gateway"
-version = "1.0.2"
+version = "1.0.3"
 description = ""
 authors = [ "Caktus Group <team@caktusgroup.com>" ]
 license = "MIT"
