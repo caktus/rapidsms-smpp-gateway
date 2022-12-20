@@ -8,6 +8,7 @@ from rapidsms.router import lookup_connections, receive
 
 from smpp_gateway.models import MOMessage
 from smpp_gateway.queries import get_mo_messages_to_process, pg_listen
+from smpp_gateway.utils import set_exit_signals
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,14 @@ def listen_mo_messages(channel: str):
     """Batch process any queued incoming messages, then listen to be notified
     of new arrivals.
     """
+    exit_signal_received = set_exit_signals()
     smses = get_mo_messages_to_process(limit=100)
     while smses:
         handle_mo_messages(smses)
+        # If an exit was triggered, do so before retrieving more messages to process...
+        if exit_signal_received():
+            logger.info("Received exit signal, leaving processing loop...")
+            return
         smses = get_mo_messages_to_process(limit=100)
 
     pg_conn = pg_listen(channel)
@@ -53,3 +59,6 @@ def listen_mo_messages(channel: str):
                 logger.info(f"Got NOTIFY:{notify}")
                 smses = get_mo_messages_to_process(limit=1)
                 handle_mo_messages(smses)
+        if exit_signal_received():
+            logger.info("Received exit signal, leaving listen loop...")
+            return
