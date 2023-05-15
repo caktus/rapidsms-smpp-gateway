@@ -82,6 +82,37 @@ class TestMessageReceivedHandler(object):
             == b"this is a delivery receipt"
         )
 
+    def test_received_null_short_message(self):
+        """When a message is received with a null short_message, persist it
+        and notify the MO listener."""
+        backend = BackendFactory()
+        client = get_smpplib_client(
+            "127.0.0.1",
+            8000,
+            "notify_mo_channel",
+            backend,
+            {},
+        )
+
+        pdu = DeliverSM("deliver_sm")
+        pdu.short_message = None
+        pdu.source_addr = "+46166371876"
+
+        listen_conn = pg_listen("notify_mo_channel")
+
+        client.message_received_handler(pdu)
+
+        # should notify the MO listener
+        listen_conn.poll()
+        assert len(listen_conn.notifies) == 1
+
+        # there should be a message for the MO listener to process
+        msg = MOMessage.objects.get()
+        assert msg.backend == backend
+        assert msg.short_message == b""
+        assert msg.params["source_addr"] == "+46166371876"
+        assert msg.status == MOMessage.Status.NEW
+
 
 @pytest.mark.django_db(transaction=True)
 def test_message_sent_handler():
