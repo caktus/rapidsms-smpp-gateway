@@ -52,7 +52,7 @@ docker run \
     -e POSTGRES_DB=test_database \
     -e POSTGRES_USER=test_user \
     -e POSTGRES_PASSWORD=test_password \
-    postgres:10.18
+    postgres:15
 # wait for DB to start up
 
 pytest

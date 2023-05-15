@@ -123,7 +123,7 @@ class PgSmppClient(smpplib.client.Client):
             create_time=now,
             modify_time=now,
             backend=self.backend,
-            short_message=pdu.short_message,
+            short_message=pdu.short_message or b"",
             params=params,
             status=MOMessage.Status.NEW,
         )
