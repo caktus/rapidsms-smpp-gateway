@@ -1,5 +1,9 @@
 # Changes
 
+## 1.0.4 (May 14, 2023)
+
+- Bug fix: Avoid `IntegrityError` when `short_message` is `None` (#14)
+
 ## 1.0.3 (December 20, 2022)
 
 - Add support for graceful termination to `listen_mo_messages` command (#13)
