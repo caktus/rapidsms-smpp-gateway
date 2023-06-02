@@ -18,11 +18,15 @@ def get_smpplib_client(
     notify_mo_channel: str,
     backend: Backend,
     submit_sm_params: Dict,
-    hc_uuid: str,
+    hc_check_uuid: str,
+    hc_ping_key: str,
+    hc_check_slug: str,
 ) -> PgSmppClient:
     sequence_generator = PgSmppSequenceGenerator(db_conn, backend.name)
-    if hc_uuid:
-        hc_worker = HealthchecksIoWorker(hc_uuid)
+    if hc_check_uuid:
+        hc_worker = HealthchecksIoWorker(uuid=hc_check_uuid)
+    elif hc_ping_key and hc_check_slug:
+        hc_worker = HealthchecksIoWorker(ping_key=hc_ping_key, slug=hc_check_slug)
     else:
         hc_worker = None
     client = PgSmppClient(
@@ -63,7 +67,9 @@ def start_smpp_client(options):
         options["notify_mo_channel"],
         backend,
         json.loads(options["submit_sm_params"]),
-        options["hc_uuid"],
+        options["hc_check_uuid"],
+        options["hc_ping_key"],
+        options["hc_check_slug"],
     )
     smpplib_main_loop(
         client,

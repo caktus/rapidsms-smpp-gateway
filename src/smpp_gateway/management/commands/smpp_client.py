@@ -63,8 +63,19 @@ class Command(BaseCommand):
             "Not intended for use with a real MNO.",
         )
         parser.add_argument(
-            "--hc-uuid",
-            default=os.environ.get("HEALTHCHECKS_IO_UUID"),
+            "--hc-check-uuid",
+            default=os.environ.get("HEALTHCHECKS_IO_CHECK_UUID"),
+            help="Pings healthchecks.io with the specified check UUID.",
+        )
+        parser.add_argument(
+            "--hc-ping-key",
+            default=os.environ.get("HEALTHCHECKS_IO_PING_KEY"),
+            help="Pings healthchecks.io with the specified ping key and check slug.",
+        )
+        parser.add_argument(
+            "--hc-check-slug",
+            default=os.environ.get("HEALTHCHECKS_IO_CHECK_SLUG"),
+            help="Pings healthchecks.io with the specified ping key and check slug.",
         )
 
     def handle(self, *args, **options):

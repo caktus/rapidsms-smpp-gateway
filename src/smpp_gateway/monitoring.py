@@ -15,13 +15,16 @@ class HealthchecksIoWorker:
     SUCCESS = 1
     FAIL = 2
 
-    def __init__(self, uuid):
+    def __init__(self, uuid=None, ping_key=None, slug=None):
         # Only attempt import if healthchecks.io is enabled
         from healthchecks_io import Client
 
         self.queue = queue.Queue()
-        self.client = Client()
-        self.uuid = uuid
+        self.client = Client(ping_key=ping_key)
+        if uuid:
+            self.ping_kwargs = {"uuid": uuid}
+        else:
+            self.ping_kwargs = {"slug": slug}
         threading.Thread(target=self._worker_thread, daemon=True).start()
 
     def _worker_thread(self):
@@ -35,14 +38,14 @@ class HealthchecksIoWorker:
                     # Skip success_ping if less than a minute has passed since the last one
                     # (the highest frequency possible in healthchecks.io / cron syntax).
                     if last_success_time + 60 < time.time():
-                        logger.debug(f"Sending success_ping for {self.uuid}")
-                        self.client.success_ping(uuid=self.uuid)
+                        logger.debug(f"Sending success_ping for {self.ping_kwargs}")
+                        self.client.success_ping(**self.ping_kwargs)
                         last_success_time = time.time()
                     else:
-                        logger.debug(f"Skipping success_ping for {self.uuid}")
+                        logger.debug(f"Skipping success_ping for {self.ping_kwargs}")
                 elif item == HealthchecksIoWorker.FAIL:
-                    logger.debug(f"Sending fail_ping for {self.uuid}")
-                    self.client.fail_ping(uuid=self.uuid)
+                    logger.debug(f"Sending fail_ping for {self.ping_kwargs}")
+                    self.client.fail_ping(**self.ping_kwargs)
                 else:
                     raise ValueError(f"Unknown task: {item}")
             except HCAPIError:
