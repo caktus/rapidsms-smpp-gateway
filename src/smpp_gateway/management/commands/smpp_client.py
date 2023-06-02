@@ -62,6 +62,10 @@ class Command(BaseCommand):
             help="Sends the specified number of SMSes in bulk on startup. "
             "Not intended for use with a real MNO.",
         )
+        parser.add_argument(
+            "--hc-uuid",
+            default=os.environ.get("HEALTHCHECKS_IO_UUID"),
+        )
 
     def handle(self, *args, **options):
         start_smpp_client(options)

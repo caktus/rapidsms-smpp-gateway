@@ -7,6 +7,7 @@ from django.db import connection as db_conn
 from rapidsms.models import Backend
 
 from smpp_gateway.client import PgSmppClient, PgSmppSequenceGenerator
+from smpp_gateway.monitoring import HealthchecksIoWorker
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,17 @@ def get_smpplib_client(
     notify_mo_channel: str,
     backend: Backend,
     submit_sm_params: Dict,
+    hc_uuid: str,
 ) -> PgSmppClient:
     sequence_generator = PgSmppSequenceGenerator(db_conn, backend.name)
+    if hc_uuid:
+        hc_worker = HealthchecksIoWorker(hc_uuid)
+    else:
+        hc_worker = None
     client = PgSmppClient(
         notify_mo_channel,
         backend,
+        hc_worker,
         submit_sm_params,
         host,
         port,
@@ -56,6 +63,7 @@ def start_smpp_client(options):
         options["notify_mo_channel"],
         backend,
         json.loads(options["submit_sm_params"]),
+        options["hc_uuid"],
     )
     smpplib_main_loop(
         client,
