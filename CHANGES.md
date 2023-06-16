@@ -1,5 +1,9 @@
 # Changes
 
+## 1.1 (June 2, 2023)
+
+- Add support for pinging healthchecks.io from the SMPP client main loop (#15)
+
 ## 1.0.4 (May 14, 2023)
 
 - Bug fix: Avoid `IntegrityError` when `short_message` is `None` (#14)

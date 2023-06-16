@@ -15,6 +15,7 @@ from rapidsms.models import Backend
 from smpplib.command import Command, DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
+from smpp_gateway.monitoring import HealthchecksIoWorker
 from smpp_gateway.queries import get_mt_messages_to_send, pg_listen, pg_notify
 from smpp_gateway.utils import decoded_params, set_exit_signals
 
@@ -68,6 +69,7 @@ class PgSmppClient(smpplib.client.Client):
         self,
         notify_mo_channel: str,
         backend: Backend,
+        hc_worker: HealthchecksIoWorker,
         submit_sm_params: Dict,
         *args,
         **kwargs,
@@ -75,6 +77,7 @@ class PgSmppClient(smpplib.client.Client):
         self.exit_signal_received = set_exit_signals()
         self.notify_mo_channel = notify_mo_channel
         self.backend = backend
+        self.hc_worker = hc_worker
         self.submit_sm_params = submit_sm_params
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
@@ -243,6 +246,8 @@ class PgSmppClient(smpplib.client.Client):
                     self.read_once(ignore_error_codes, auto_send_enquire_link)
                 else:
                     self.receive_pg_notifies()
+            if self.hc_worker:
+                self.hc_worker.success_ping()
             if self.exit_signal_received():
                 self.logger.info("Got exit signal, leaving listen loop")
                 self.safe_disconnect()

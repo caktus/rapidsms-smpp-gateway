@@ -21,7 +21,10 @@ class TestMessageReceivedHandler(object):
             8000,
             "notify_mo_channel",
             backend,
-            {},
+            {},  # submit_sm_params
+            "",  # hc_check_uuid
+            "",  # hc_ping_key
+            "",  # hc_check_slug
         )
 
         pdu = DeliverSM("deliver_sm")
@@ -53,7 +56,10 @@ class TestMessageReceivedHandler(object):
             8000,
             "notify_mo_channel",
             backend,
-            {},
+            {},  # submit_sm_params
+            "",  # hc_check_uuid
+            "",  # hc_ping_key
+            "",  # hc_check_slug
         )
         outbound_msg = MTMessageFactory(status=MTMessage.Status.SENT, backend=backend)
         outbound_msg_status = MTMessageStatusFactory(
@@ -91,7 +97,10 @@ class TestMessageReceivedHandler(object):
             8000,
             "notify_mo_channel",
             backend,
-            {},
+            {},  # submit_sm_params
+            "",  # hc_check_uuid
+            "",  # hc_ping_key
+            "",  # hc_check_slug
         )
 
         pdu = DeliverSM("deliver_sm")
@@ -125,7 +134,10 @@ def test_message_sent_handler():
         8000,
         "notify_mo_channel",
         backend,
-        {},
+        {},  # submit_sm_params
+        "",  # hc_check_uuid
+        "",  # hc_ping_key
+        "",  # hc_check_slug
     )
     outbound_msg = MTMessageFactory(status=MTMessage.Status.SENT, backend=backend)
     outbound_msg_status = MTMessageStatusFactory(mt_message=outbound_msg)
