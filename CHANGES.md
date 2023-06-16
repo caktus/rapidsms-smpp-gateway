@@ -1,6 +1,6 @@
 # Changes
 
-## 1.1.0 (June 2, 2023)
+## 1.1.0 (June 16, 2023)
 
 - Add support for pinging healthchecks.io from the SMPP client main loop (#15)
 
