@@ -65,17 +65,20 @@ class Command(BaseCommand):
         parser.add_argument(
             "--hc-check-uuid",
             default=os.environ.get("HEALTHCHECKS_IO_CHECK_UUID"),
-            help="Pings healthchecks.io with the specified check UUID.",
+            help="Pings healthchecks.io with the specified check UUID. "
+            "If set, --hc-ping-key and --hc-check-slug will be ignored.",
         )
         parser.add_argument(
             "--hc-ping-key",
             default=os.environ.get("HEALTHCHECKS_IO_PING_KEY"),
-            help="Pings healthchecks.io with the specified ping key and check slug.",
+            help="Pings healthchecks.io with the specified ping key and check slug. "
+            "If set, --hc-check-slug must also be set.",
         )
         parser.add_argument(
             "--hc-check-slug",
             default=os.environ.get("HEALTHCHECKS_IO_CHECK_SLUG"),
-            help="Pings healthchecks.io with the specified ping key and check slug.",
+            help="Pings healthchecks.io with the specified ping key and check slug. "
+            "If set, --hc-ping-key must also be set.",
         )
 
     def handle(self, *args, **options):
