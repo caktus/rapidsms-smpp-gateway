@@ -14,9 +14,10 @@ include = [ { path = "tests", format = "sdist" } ]
 [tool.poetry.dependencies]
 python = ">=3.8"
 RapidSMS = ">=2.0"
-smpplib = ">=2.2"
+# Remove max version of 2.2.3 when https://github.com/python-smpplib/python-smpplib/pull/221 has been merged
+smpplib = ">=2.2,<2.2.3"
 psycopg2 = ">=2.8"
-django = ">=3.2,<4.0"
+django = ">=3.2,<5.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "~7"
