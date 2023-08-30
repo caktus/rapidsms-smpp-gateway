@@ -1116,20 +1116,25 @@ files = [
 ]
 
 [[package]]
-name = "rapidsms"
+name = "RapidSMS"
 version = "2.0.0"
 description = "Build SMS applications with Python and Django"
 optional = false
 python-versions = "*"
-files = [
-    {file = "RapidSMS-2.0.0.tar.gz", hash = "sha256:f24727aef7b444753a0145ebd929caf9dea955927dcd86583dd12b5c0f0542d8"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 django-selectable = ">=0.7.0"
 django-tables2 = ">=2.1.1"
 djappsettings = ">=0.4.0"
 requests = ">=1.2.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/rapidsms/rapidsms/"
+reference = "update-to-support-django-4-2"
+resolved_reference = "5f620771dad8d8e8940c792466b26fb4e4732de6"
 
 [[package]]
 name = "readme-renderer"
@@ -1517,4 +1522,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8"
-content-hash = "a348f07ce2f6d32d05bb73affa9e1f58c0420422e73ce161af72a26b6ae2ced9"
+content-hash = "f6856e70220acea405878d4a612acb5d7414a401b72db556925c33f69db568de"
