@@ -1,9 +1,8 @@
 import logging
 import select
 
-import psycopg2.extensions
-
 from django.db.models import QuerySet
+from psycopg2.extensions import Notify  # noqa F401
 from rapidsms.router import lookup_connections, receive
 
 from smpp_gateway.models import MOMessage
@@ -55,7 +54,7 @@ def listen_mo_messages(channel: str):
         else:
             pg_conn.poll()
             while pg_conn.notifies:
-                notify = pg_conn.notifies.pop()  # type: psycopg2.extensions.Notify
+                notify = pg_conn.notifies.pop()  # type: Notify
                 logger.info(f"Got NOTIFY:{notify}")
                 smses = get_mo_messages_to_process(limit=1)
                 handle_mo_messages(smses)
