@@ -15,3 +15,5 @@ INSTALLED_APPS = [
     "rapidsms",
     "smpp_gateway",
 ]
+
+USE_TZ = True
