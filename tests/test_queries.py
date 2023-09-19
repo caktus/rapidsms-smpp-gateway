@@ -167,6 +167,7 @@ class TestConcurrency(object):
 
         assert len(messages) == message_count
         assert set(messages) == set(new_messages)
+        pool.close()
 
     def test_get_mt_messages_concurrently(self):
         """
@@ -189,6 +190,7 @@ class TestConcurrency(object):
 
         assert len(messages) == message_count
         assert {msg["id"] for msg in messages} == {msg.id for msg in new_messages}
+        pool.close()
 
 
 @pytest.mark.django_db(transaction=True)

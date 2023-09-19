@@ -25,11 +25,10 @@ rapidsms-smpp-gateway and be sure that the current tests are passing on your
 machine:
 
 ```shell
-# install poetry
-brew install pipx
-pipx install poetry
-# then install requirements within activated venv
-poetry install
+# create python3.10 virtualenv
+echo "layout python python3.10 > .envrc"
+direnv allow
+pip install -r dev-requirements.txt
 ```
 
 To make sure that you don't accidentally commit code that does not follow the
