@@ -1,5 +1,9 @@
 # Changes
 
+## 1.2.1 (September 19, 2023)
+
+- Restore missing migrations files (#18)
+
 ## 1.2.0 (September 19, 2023)
 
 - Add support for Django 4.2 (#16)
