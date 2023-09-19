@@ -1,5 +1,10 @@
 # Changes
 
+## 1.2.0 (September 19, 2023)
+
+- Add support for Django 4.2 (#16)
+- Switch away from Poetry & add support for tox (#17)
+
 ## 1.1.0 (June 16, 2023)
 
 - Add support for pinging healthchecks.io from the SMPP client main loop (#15)
