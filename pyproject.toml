@@ -1,44 +1,8 @@
-[tool.poetry]
-name = "smpp_gateway"
-version = "1.1.0"
-description = ""
-authors = [ "Caktus Group <team@caktusgroup.com>" ]
-license = "MIT"
-readme = "README.md"
-repository = "https://github.com/caktus/rapidsms-smpp-gateway"
-
-packages = [ { include = "smpp_gateway", from = "src" } ]
-
-include = [ { path = "tests", format = "sdist" } ]
-
-[tool.poetry.dependencies]
-python = ">=3.8"
-# Uncomment when https://github.com/rapidsms/rapidsms/pull/500/ is merged
-# RapidSMS = ">=2.0"
-RapidSMS = { git = "https://github.com/rapidsms/rapidsms/", branch = "update-to-support-django-4-2" }
-# Remove max version of 2.2.3 when https://github.com/python-smpplib/python-smpplib/pull/221 has been merged
-smpplib = ">=2.2,<2.2.3"
-psycopg2 = ">=2.8"
-django = ">=3.2,<5.0"
-
-[tool.poetry.dev-dependencies]
-pytest = "~7"
-pre-commit = "~2.15"
-black = "22.3.0"
-python-semantic-release = "~7.22"
-pytest-django = "^4.5.2"
-factory-boy = "^3.2.1"
-django-stubs = "^1.10.1"
-
-[build-system]
-requires = [ "poetry-core>=1.0.0", "setuptools" ]
-build-backend = "poetry.core.masonry.api"
-
 [tool.black]
-target_version = [ 'py39' ]
+target_version = [ 'py310' ]
 
 [tool.isort]
-py_version = 36
+py_version = 310
 profile = "black"
 multi_line_output = 3
 include_trailing_comma = true
