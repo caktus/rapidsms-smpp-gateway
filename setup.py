@@ -14,7 +14,7 @@ def read_file(filename):
 if __name__ == "__main__":
     setuptools.setup(
         name="smpp_gateway",
-        version="1.2.0",
+        version="1.2.1",
         license="MIT",
         install_requires=[
             "RapidSMS>=2.0",
@@ -22,7 +22,7 @@ if __name__ == "__main__":
             "psycopg2>=2.8",
             "django>=3.2,<5.0",
         ],
-        packages=["smpp_gateway"],
+        packages=setuptools.find_packages(where="src"),
         package_dir={"": "src"},
         include_package_data=True,
         exclude_package_data={"": ["*.pyc"]},
