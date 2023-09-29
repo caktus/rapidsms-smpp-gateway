@@ -2,7 +2,7 @@
 
 ## 1.2.2 (September 29, 2023)
 
-- Restore management commands __init__.py files
+- Restore management commands `__init__.py` files
 
 ## 1.2.1 (September 19, 2023)
 
