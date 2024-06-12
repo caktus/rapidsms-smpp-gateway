@@ -1,5 +1,9 @@
 # Changes
 
+## 1.2.3 (June 12, 2024)
+
+- Add indexes to speed up finding new messages to process
+
 ## 1.2.2 (September 29, 2023)
 
 - Restore management commands `__init__.py` files
