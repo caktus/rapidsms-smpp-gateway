@@ -46,6 +46,14 @@ class MOMessage(AbstractTimestampModel, models.Model):
 
     class Meta:
         verbose_name = _("mobile-originated message")
+        indexes = (
+            models.Index(
+                # Allow for quick filtering of messages that need to be processed
+                fields=["status"],
+                name="mo_message_status_idx",
+                condition=models.Q(status="new"),  # No way to access Status.NEW here?
+            ),
+        )
 
 
 class MTMessage(AbstractTimestampModel, models.Model):
@@ -77,6 +85,14 @@ class MTMessage(AbstractTimestampModel, models.Model):
 
     class Meta:
         verbose_name = _("mobile-terminated message")
+        indexes = (
+            models.Index(
+                # Allow for quick filtering of messages that need to be processed
+                fields=["status"],
+                name="mt_message_status_idx",
+                condition=models.Q(status="new"),  # No way to access Status.NEW here?
+            ),
+        )
 
 
 class MTMessageStatus(AbstractTimestampModel, models.Model):
