@@ -14,7 +14,7 @@ class TestHandleMOMessages(object):
             [
                 call
                 for call in mock_receive.call_args_list
-                if call.args[0] == message.decoded_short_message
+                if call.args[0] == message.safe_decoded_short_message
             ]
         )
 
@@ -39,15 +39,28 @@ class TestHandleMOMessages(object):
 
         Unreceived messages should be left untouched to be retried later.
         """
-        MOMessageFactory.create_batch(5)
-        messages = MOMessage.objects.all()
+        MOMessageFactory.create_batch(6)
+        bad_short_msg = MOMessage.objects.order_by("pk").first()
+        # Invalid data_coding value will cause a decoding failure
+        bad_short_msg.params["data_coding"] = 123
+        bad_short_msg.save()
+        messages = MOMessage.objects.order_by("pk").all()
 
         with mock.patch("smpp_gateway.subscribers.receive") as mock_receive:
-            mock_receive.side_effect = [None, None, Exception("boom"), None, None]
+            mock_receive.side_effect = [None, None, Exception("boom"), None, None, None]
             with pytest.raises(Exception, match=r"boom"):
                 handle_mo_messages(messages)
 
-        for received_message in messages[:2]:
+        # Message 0 raised a message decoding exception, it should be marked
+        # with an error since there is no sense in retrying decoding errors
+        # before a code change
+        failed_message = messages[0]
+        failed_message.refresh_from_db()
+        assert failed_message.status == MOMessage.Status.ERROR
+        # receive() should never be called for a message with a failed decoding
+        assert self.receive_was_called(mock_receive, failed_message) == 0
+
+        for received_message in messages[1:3]:
             # Messages 1, 2 should be received and marked as done
             received_message.refresh_from_db()
             assert received_message.status == MOMessage.Status.DONE
@@ -55,12 +68,12 @@ class TestHandleMOMessages(object):
 
         # Message 3 raised an exception, should not be marked done so it
         # will be retried later
-        failed_message = messages[2]
+        failed_message = messages[3]
         failed_message.refresh_from_db()
         assert failed_message.status == MOMessage.Status.NEW
         assert self.receive_was_called(mock_receive, failed_message)
 
-        for other_message in messages[3:]:
+        for other_message in messages[4:]:
             # Messages 4, 5 should remain new to be received later
             other_message.refresh_from_db()
             assert other_message.status == MOMessage.Status.NEW

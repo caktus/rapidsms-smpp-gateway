@@ -23,8 +23,17 @@ def handle_mo_messages(smses: QuerySet[MOMessage]):
                 "to_addr": sms.params["destination_addr"],
                 "from_addr": sms.params["source_addr"],
             }
-            receive(sms.decoded_short_message, connection, fields=fields)
-            received_smses.append(sms)
+            try:
+                decoded_short_message = sms.get_decoded_short_message()
+            except (ValueError, UnicodeDecodeError) as err:
+                logger.exception("Failed to decode short message")
+                MOMessage.objects.filter(pk=sms.pk).update(
+                    status=MOMessage.Status.ERROR,
+                    error=str(err),
+                )
+            else:
+                receive(decoded_short_message, connection, fields=fields)
+                received_smses.append(sms)
     finally:
         if received_smses:
             MOMessage.objects.filter(pk__in=[sms.pk for sms in received_smses]).update(
