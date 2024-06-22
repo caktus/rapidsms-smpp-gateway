@@ -46,14 +46,15 @@ def listen_mo_messages(channel: str):
     of new arrivals.
     """
     exit_signal_received = set_exit_signals()
-    smses = get_mo_messages_to_process(limit=100)
+    # FIXME: Allow this limit to be set from an environment variable
+    smses = get_mo_messages_to_process(limit=1)
     while smses:
         handle_mo_messages(smses)
         # If an exit was triggered, do so before retrieving more messages to process...
         if exit_signal_received():
             logger.info("Received exit signal, leaving processing loop...")
             return
-        smses = get_mo_messages_to_process(limit=100)
+        smses = get_mo_messages_to_process(limit=1)
 
     pg_conn = pg_listen(channel)
 
