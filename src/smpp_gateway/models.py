@@ -19,6 +19,7 @@ class MOMessage(AbstractTimestampModel, models.Model):
     class Status(models.TextChoices):
         NEW = "new", _("New")
         PROCESSING = "processing", _("Processing")
+        ERROR = "error", _("Error")
         DONE = "done", _("Done")
 
     backend = models.ForeignKey(
@@ -28,18 +29,35 @@ class MOMessage(AbstractTimestampModel, models.Model):
     short_message = models.BinaryField(_("short message"))
     params = models.JSONField(_("params"))
     status = models.CharField(_("status"), max_length=32, choices=Status.choices)
+    error = models.TextField(_("error"), blank=True)
 
-    @cached_property
-    def decoded_short_message(self) -> str:
+    def get_decoded_short_message(self) -> str:
         data_coding = self.params.get("data_coding", 0)
         short_message = self.short_message.tobytes()  # type: bytes
+        # Support the 3 most common data_coding values
+        # https://stackoverflow.com/a/11986844/166053
         if data_coding == 0:
-            return short_message.decode("ascii")
+            # data_coding 0 means the message is encoded in ASCII, but sometimes
+            # we get values values outside the ASCII range, such as b'\xa4' ('¤').
+            # Fall back to iso-8859-1 in this case.
+            try:
+                return short_message.decode("ascii")
+            except UnicodeDecodeError:
+                return short_message.decode("iso-8859-1")
+        if data_coding == 3:
+            return short_message.decode("iso-8859-1")
         if data_coding == 8:
             return short_message.decode("utf-16-be")
         raise ValueError(
             f"Unsupported data_coding {data_coding}. Short message: {short_message}"
         )
+
+    @cached_property
+    def safe_decoded_short_message(self) -> str:
+        try:
+            return self.get_decoded_short_message()
+        except Exception as err:
+            return str(err)
 
     def __str__(self):
         return f"{self.params['short_message']} ({self.id})"

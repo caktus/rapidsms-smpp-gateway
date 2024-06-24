@@ -166,9 +166,9 @@ class PgSmppClient(smpplib.client.Client):
 
     # ############### Listen for and send MT Messages ################
 
-    def receive_pg_notifies(self):
+    def receive_pg_notify(self):
         self._pg_conn.poll()
-        while self._pg_conn.notifies:
+        if self._pg_conn.notifies:
             notify = self._pg_conn.notifies.pop()
             logger.info(f"Got NOTIFY:{notify}")
             self.send_mt_messages()
@@ -245,7 +245,7 @@ class PgSmppClient(smpplib.client.Client):
                 if ready_socket is self._socket:
                     self.read_once(ignore_error_codes, auto_send_enquire_link)
                 else:
-                    self.receive_pg_notifies()
+                    self.receive_pg_notify()
             if self.hc_worker:
                 self.hc_worker.success_ping()
             if self.exit_signal_received():
