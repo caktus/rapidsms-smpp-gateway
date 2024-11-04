@@ -1,6 +1,6 @@
 import logging
 
-from typing import Any, Dict, List
+from typing import Any
 
 import psycopg2.extensions
 
@@ -38,7 +38,7 @@ def pg_notify(channel: str):
         cursor.execute(f"NOTIFY {channel};")
 
 
-def get_mt_messages_to_send(limit: int, backend: Backend) -> List[Dict[str, Any]]:
+def get_mt_messages_to_send(limit: int, backend: Backend) -> list[dict[str, Any]]:
     """Fetches up to `limit` messages intended for `backend`, updates their
     status to SENDING, and returns select fields from the model.
     """

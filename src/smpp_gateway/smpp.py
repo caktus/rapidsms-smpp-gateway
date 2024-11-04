@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Dict, Optional
+from typing import Optional
 
 from django.db import connection as db_conn
 from rapidsms.models import Backend
@@ -17,7 +17,7 @@ def get_smpplib_client(
     port: int,
     notify_mo_channel: str,
     backend: Backend,
-    submit_sm_params: Dict,
+    submit_sm_params: dict,
     hc_check_uuid: str,
     hc_ping_key: str,
     hc_check_slug: str,

@@ -4,7 +4,7 @@ import logging
 import signal
 import string
 
-from typing import Any, Dict
+from typing import Any
 
 import smpplib
 
@@ -64,5 +64,5 @@ def maybe_decode(value):
     return value
 
 
-def decoded_params(pdu: smpplib.command.Command) -> Dict[str, Any]:
+def decoded_params(pdu: smpplib.command.Command) -> dict[str, Any]:
     return {key: maybe_decode(getattr(pdu, key)) for key in pdu.params.keys()}
