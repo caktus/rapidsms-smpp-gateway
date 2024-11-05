@@ -13,23 +13,25 @@ logger = logging.getLogger(__name__)
 
 
 def handle_mo_messages(smses: QuerySet[MOMessage]):
-    received_smses = []
-    try:
-        for sms in smses:
-            connection = lookup_connections(
-                backend=sms.backend, identities=[sms.params["source_addr"]]
-            )[0]
-            fields = {
-                "to_addr": sms.params["destination_addr"],
-                "from_addr": sms.params["source_addr"],
-            }
-            receive(sms.decoded_short_message, connection, fields=fields)
-            received_smses.append(sms)
-    finally:
-        if received_smses:
-            MOMessage.objects.filter(pk__in=[sms.pk for sms in received_smses]).update(
-                status=MOMessage.Status.DONE
+    for sms in smses:
+        connection = lookup_connections(
+            backend=sms.backend, identities=[sms.params["source_addr"]]
+        )[0]
+        fields = {
+            "to_addr": sms.params["destination_addr"],
+            "from_addr": sms.params["source_addr"],
+        }
+        try:
+            decoded_short_message = sms.get_decoded_short_message()
+        except (ValueError, UnicodeDecodeError) as err:
+            logger.exception("Failed to decode short message")
+            MOMessage.objects.filter(pk=sms.pk).update(
+                status=MOMessage.Status.ERROR,
+                error=str(err),
             )
+        else:
+            receive(decoded_short_message, connection, fields=fields)
+            MOMessage.objects.filter(pk=sms.pk).update(status=MOMessage.Status.DONE)
 
 
 def listen_mo_messages(channel: str):
@@ -37,14 +39,15 @@ def listen_mo_messages(channel: str):
     of new arrivals.
     """
     exit_signal_received = set_exit_signals()
-    smses = get_mo_messages_to_process(limit=100)
+    # FIXME: Allow this limit to be set from an environment variable
+    smses = get_mo_messages_to_process(limit=1)
     while smses:
         handle_mo_messages(smses)
         # If an exit was triggered, do so before retrieving more messages to process...
         if exit_signal_received():
             logger.info("Received exit signal, leaving processing loop...")
             return
-        smses = get_mo_messages_to_process(limit=100)
+        smses = get_mo_messages_to_process(limit=1)
 
     pg_conn = pg_listen(channel)
 
