@@ -10,7 +10,7 @@ from tests.factories import BackendFactory, MTMessageFactory, MTMessageStatusFac
 
 
 @pytest.mark.django_db(transaction=True)
-class TestMessageReceivedHandler(object):
+class TestMessageReceivedHandler:
     def test_received_mo_message(self):
         """When a message is received that is not a receipt
         acknowledgement, persist it and notify the MO listener.

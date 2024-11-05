@@ -13,7 +13,7 @@ from tests.factories import BackendFactory, MOMessageFactory, MTMessageFactory
 
 
 @pytest.mark.django_db
-class TestGetMessagesToSend(object):
+class TestGetMessagesToSend:
     def test_empty(self):
         """Return an empty list if there are no queued outbound messages."""
         messages = get_mt_messages_to_send(100, BackendFactory())
@@ -86,7 +86,7 @@ class TestGetMessagesToSend(object):
 
 
 @pytest.mark.django_db
-class TestGetMessagesToProcess(object):
+class TestGetMessagesToProcess:
     def test_empty(self):
         """Return an empty list if there are no queued inbound messages."""
         messages = get_mo_messages_to_process(limit=1)
@@ -145,7 +145,7 @@ class TestGetMessagesToProcess(object):
 
 
 @pytest.mark.django_db(transaction=True)
-class TestConcurrency(object):
+class TestConcurrency:
     def test_get_mo_messages_concurrently(self):
         """
         Multiple concurrent calls to get_mo_messages_to_process()
@@ -194,7 +194,7 @@ class TestConcurrency(object):
 
 
 @pytest.mark.django_db(transaction=True)
-class TestNotifications(object):
+class TestNotifications:
     def test_listen_notify_new_messages(self):
         """`pg_notify` should publish messages that can be read by the
         connection made from `pg_listen`.

@@ -8,7 +8,7 @@ from tests.factories import MOMessageFactory
 
 
 @pytest.mark.django_db
-class TestHandleMOMessages(object):
+class TestHandleMOMessages:
     def receive_was_called(self, mock_receive: mock.Mock, message: MOMessage):
         return len(
             [

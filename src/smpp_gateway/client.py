@@ -2,8 +2,6 @@ import logging
 import select
 import socket
 
-from typing import Dict
-
 import smpplib
 import smpplib.client
 import smpplib.consts
@@ -70,7 +68,7 @@ class PgSmppClient(smpplib.client.Client):
         notify_mo_channel: str,
         backend: Backend,
         hc_worker: HealthchecksIoWorker,
-        submit_sm_params: Dict,
+        submit_sm_params: dict,
         *args,
         **kwargs,
     ):
