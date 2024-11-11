@@ -69,6 +69,7 @@ class PgSmppClient(smpplib.client.Client):
         backend: Backend,
         hc_worker: HealthchecksIoWorker,
         submit_sm_params: dict,
+        listen_transactional_mt_messages_only: bool,
         *args,
         **kwargs,
     ):
@@ -77,6 +78,9 @@ class PgSmppClient(smpplib.client.Client):
         self.backend = backend
         self.hc_worker = hc_worker
         self.submit_sm_params = submit_sm_params
+        self.listen_transactional_mt_messages_only = (
+            listen_transactional_mt_messages_only
+        )
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
 
@@ -169,10 +173,14 @@ class PgSmppClient(smpplib.client.Client):
         if self._pg_conn.notifies:
             notify = self._pg_conn.notifies.pop()
             logger.info(f"Got NOTIFY:{notify}")
-            self.send_mt_messages()
+            if self.listen_transactional_mt_messages_only:
+                if notify.payload.isdigit():
+                    self.send_mt_messages(id=int(notify.payload))
+            else:
+                self.send_mt_messages()
 
-    def send_mt_messages(self):
-        smses = get_mt_messages_to_send(limit=100, backend=self.backend)
+    def send_mt_messages(self, id=None):
+        smses = get_mt_messages_to_send(limit=100, backend=self.backend, id=id)
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}

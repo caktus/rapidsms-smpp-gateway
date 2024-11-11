@@ -84,6 +84,32 @@ class TestGetMessagesToSend:
             else:
                 assert message.status == MTMessage.Status.NEW
 
+    def test_filter_by_message_id(self):
+        """If a message ID is provided, only return that one message."""
+        backend = BackendFactory()
+        all_new_messages = MTMessageFactory.create_batch(
+            5, backend=backend, status=MTMessage.Status.NEW
+        )
+        first_id = all_new_messages[0].id
+
+        messages = get_mt_messages_to_send(5, backend, id=first_id)
+
+        assert len(messages) == 1
+        assert messages[0]["id"] == first_id
+        assert len(all_new_messages) == 5
+
+    def test_filter_by_message_id_not_new(self):
+        """If a message ID is provided and that message's status is not NEW,
+        no messages are returned.
+        """
+        backend = BackendFactory()
+        message = MTMessageFactory(backend=backend, status=MTMessage.Status.SENDING)
+        MTMessageFactory.create_batch(4, backend=backend, status=MTMessage.Status.NEW)
+
+        messages = get_mt_messages_to_send(5, backend, id=message.id)
+
+        assert len(messages) == 0
+
 
 @pytest.mark.django_db
 class TestGetMessagesToProcess:

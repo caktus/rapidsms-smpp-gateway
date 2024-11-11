@@ -1,6 +1,6 @@
 import logging
 
-from typing import Any
+from typing import Any, Union
 
 import psycopg2.extensions
 
@@ -38,15 +38,22 @@ def pg_notify(channel: str):
         cursor.execute(f"NOTIFY {channel};")
 
 
-def get_mt_messages_to_send(limit: int, backend: Backend) -> list[dict[str, Any]]:
+def get_mt_messages_to_send(
+    limit: int, backend: Backend, id: Union[int, None] = None
+) -> list[dict[str, Any]]:
     """Fetches up to `limit` messages intended for `backend`, updates their
     status to SENDING, and returns select fields from the model.
     """
     with transaction.atomic():
+        queryset = MTMessage.objects.filter(
+            status=MTMessage.Status.NEW, backend=backend
+        )
+        if id:
+            queryset = queryset.filter(id=id)
         smses = list(
-            MTMessage.objects.filter(status=MTMessage.Status.NEW, backend=backend)
-            .select_for_update(skip_locked=True)
-            .values("id", "short_message", "params")[:limit]
+            queryset.select_for_update(skip_locked=True).values(
+                "id", "short_message", "params"
+            )[:limit]
         )
         if smses:
             pks = [sms["id"] for sms in smses]

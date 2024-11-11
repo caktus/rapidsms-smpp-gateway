@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from smpplib import consts as smpplib_consts
@@ -22,6 +24,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # listen_transactional_mt_messages_only
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -57,6 +60,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # listen_transactional_mt_messages_only
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -98,6 +102,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # listen_transactional_mt_messages_only
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -135,6 +140,7 @@ def test_message_sent_handler():
         "notify_mo_channel",
         backend,
         {},  # submit_sm_params
+        False,  # listen_transactional_mt_messages_only
         "",  # hc_check_uuid
         "",  # hc_ping_key
         "",  # hc_check_slug
@@ -153,3 +159,59 @@ def test_message_sent_handler():
 
     assert outbound_msg_status.command_status == smpplib_consts.SMPP_ESME_RSUBMITFAIL
     assert outbound_msg_status.message_id == "qwerty"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_listen_transactional_mt_messages_only_set():
+    """If listen_transactional_mt_messages_only is set, when client.receive_pg_notify()
+    is called it fetches one message with the specified ID.
+    """
+    backend = BackendFactory()
+    client = get_smpplib_client(
+        "127.0.0.1",
+        8000,
+        "notify_mo_channel",
+        backend,
+        {},  # submit_sm_params
+        True,  # listen_transactional_mt_messages_only
+        "",  # hc_check_uuid
+        "",  # hc_ping_key
+        "",  # hc_check_slug
+    )
+    messages = MTMessageFactory.create_batch(
+        3, status=MTMessage.Status.NEW, backend=backend
+    )
+
+    with patch(
+        "smpp_gateway.client.get_mt_messages_to_send"
+    ) as mock_get_mt_messages_to_send:
+        client.receive_pg_notify()
+        mock_get_mt_messages_to_send.assert_called_once()
+        assert mock_get_mt_messages_to_send.call_args.kwargs["id"] == messages[-1].id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_listen_transactional_mt_messages_only_not_set():
+    """If listen_transactional_mt_messages_only is not set, when client.receive_pg_notify()
+    is called it fetches all new messages.
+    """
+    backend = BackendFactory()
+    client = get_smpplib_client(
+        "127.0.0.1",
+        8000,
+        "notify_mo_channel",
+        backend,
+        {},  # submit_sm_params
+        False,  # listen_transactional_mt_messages_only
+        "",  # hc_check_uuid
+        "",  # hc_ping_key
+        "",  # hc_check_slug
+    )
+    MTMessageFactory.create_batch(3, status=MTMessage.Status.NEW, backend=backend)
+
+    with patch(
+        "smpp_gateway.client.get_mt_messages_to_send"
+    ) as mock_get_mt_messages_to_send:
+        client.receive_pg_notify()
+        mock_get_mt_messages_to_send.assert_called_once()
+        assert mock_get_mt_messages_to_send.call_args.kwargs["id"] is None

@@ -96,7 +96,7 @@ class MTMessage(AbstractTimestampModel, models.Model):
         super().save(*args, **kwargs)
         if self.status == MTMessage.Status.NEW:
             with connection.cursor() as curs:
-                curs.execute(f"NOTIFY {self.backend.name}")
+                curs.execute(f"NOTIFY {self.backend.name}, '{self.pk}'")
 
     def __str__(self):
         return f"{self.short_message} ({self.id})"

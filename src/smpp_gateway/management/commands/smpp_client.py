@@ -1,3 +1,4 @@
+import argparse
 import os
 
 from django.core.management.base import BaseCommand
@@ -79,6 +80,13 @@ class Command(BaseCommand):
             default=os.environ.get("HEALTHCHECKS_IO_CHECK_SLUG"),
             help="Pings healthchecks.io with the specified ping key and check slug. "
             "If set, --hc-ping-key must also be set.",
+        )
+        parser.add_argument(
+            "--listen-transactional-mt-messages-only",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Only listen for transactional MT messages and don't do bulk "
+            "sending.",
         )
 
     def handle(self, *args, **options):
