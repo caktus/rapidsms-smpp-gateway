@@ -22,6 +22,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -57,6 +58,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -98,6 +100,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -135,6 +138,7 @@ def test_message_sent_handler():
         "notify_mo_channel",
         backend,
         {},  # submit_sm_params
+        20,  # mt_messages_per_second
         "",  # hc_check_uuid
         "",  # hc_ping_key
         "",  # hc_check_slug
