@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest import mock
 
 import pytest
 
@@ -6,7 +6,7 @@ from smpplib import consts as smpplib_consts
 from smpplib.command import DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage
-from smpp_gateway.queries import pg_listen
+from smpp_gateway.queries import get_mt_messages_to_send, pg_listen
 from smpp_gateway.smpp import get_smpplib_client
 from tests.factories import BackendFactory, MTMessageFactory, MTMessageStatusFactory
 
@@ -164,7 +164,7 @@ def test_message_sent_handler():
 @pytest.mark.django_db(transaction=True)
 def test_listen_transactional_mt_messages_only_set():
     """If listen_transactional_mt_messages_only is set, when client.receive_pg_notify()
-    is called it fetches one message with the specified ID.
+    is called it fetches and sends one transactional message.
     """
     backend = BackendFactory()
     client = get_smpplib_client(
@@ -178,22 +178,43 @@ def test_listen_transactional_mt_messages_only_set():
         "",  # hc_ping_key
         "",  # hc_check_slug
     )
+
     messages = MTMessageFactory.create_batch(
-        3, status=MTMessage.Status.NEW, backend=backend
+        3, status=MTMessage.Status.NEW, backend=backend, is_transactional=True
     )
 
-    with patch(
-        "smpp_gateway.client.get_mt_messages_to_send"
+    # The client should have received 3 notifications with the message IDs as payloads
+    assert [i.payload for i in client._pg_conn.notifies] == [
+        str(i.id) for i in messages
+    ]
+
+    with mock.patch.object(
+        client, "split_and_send_message", return_value=[mock.Mock(sequence=1)]
+    ) as mock_split_and_send_message, mock.patch(
+        "smpp_gateway.client.get_mt_messages_to_send",
+        wraps=get_mt_messages_to_send,
     ) as mock_get_mt_messages_to_send:
         client.receive_pg_notify()
-        mock_get_mt_messages_to_send.assert_called_once()
-        assert mock_get_mt_messages_to_send.call_args.kwargs["id"] == messages[-1].id
+
+    # The sent message should be the last message created, since we pop from the
+    # list of notifications in receive_pg_notify()
+    last_msg = messages[-1]
+    mock_get_mt_messages_to_send.assert_called_once()
+    assert mock_get_mt_messages_to_send.call_args.kwargs["extra_filter"] == {
+        "id": last_msg.id,
+        "is_transactional": True,
+    }
+    mock_split_and_send_message.assert_called_once()
+    assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 1
+    assert MTMessage.objects.get(status=MTMessage.Status.SENT) == last_msg
+    assert MTMessage.objects.filter(status=MTMessage.Status.NEW).count() == 2
 
 
 @pytest.mark.django_db(transaction=True)
 def test_listen_transactional_mt_messages_only_not_set():
     """If listen_transactional_mt_messages_only is not set, when client.receive_pg_notify()
-    is called it fetches all new messages.
+    is called it fetches and sends all new messages, regardless of whether they
+    are transactional or not.
     """
     backend = BackendFactory()
     client = get_smpplib_client(
@@ -207,11 +228,31 @@ def test_listen_transactional_mt_messages_only_not_set():
         "",  # hc_ping_key
         "",  # hc_check_slug
     )
-    MTMessageFactory.create_batch(3, status=MTMessage.Status.NEW, backend=backend)
+    transactional = MTMessageFactory.create_batch(
+        3, status=MTMessage.Status.NEW, backend=backend, is_transactional=True
+    )
+    MTMessageFactory.create_batch(
+        3, status=MTMessage.Status.NEW, backend=backend, is_transactional=False
+    )
 
-    with patch(
-        "smpp_gateway.client.get_mt_messages_to_send"
+    # The client should have received 6 notifications. The payload for the first
+    # 3 should be the message IDs and for the others it should be an empty string
+    assert [i.payload for i in client._pg_conn.notifies] == (
+        [str(i.id) for i in transactional] + [""] * 3
+    )
+
+    with mock.patch.object(
+        client,
+        "split_and_send_message",
+        side_effect=[[mock.Mock(sequence=i)] for i in range(6)],
+    ) as mock_split_and_send_message, mock.patch(
+        "smpp_gateway.client.get_mt_messages_to_send",
+        wraps=get_mt_messages_to_send,
     ) as mock_get_mt_messages_to_send:
         client.receive_pg_notify()
-        mock_get_mt_messages_to_send.assert_called_once()
-        assert mock_get_mt_messages_to_send.call_args.kwargs["id"] is None
+
+    mock_get_mt_messages_to_send.assert_called_once()
+    assert mock_get_mt_messages_to_send.call_args.kwargs["extra_filter"] is None
+    assert mock_split_and_send_message.call_count == 6
+    assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 6
+    assert MTMessage.objects.filter(status=MTMessage.Status.NEW).count() == 0

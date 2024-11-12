@@ -39,17 +39,18 @@ def pg_notify(channel: str):
 
 
 def get_mt_messages_to_send(
-    limit: int, backend: Backend, id: Union[int, None] = None
+    limit: int, backend: Backend, extra_filter: Union[dict, None] = None
 ) -> list[dict[str, Any]]:
     """Fetches up to `limit` messages intended for `backend`, updates their
-    status to SENDING, and returns select fields from the model.
+    status to SENDING, and returns select fields from the model. If `extra_filter`
+    is provided, it is used to further filter the queryset.
     """
     with transaction.atomic():
         queryset = MTMessage.objects.filter(
             status=MTMessage.Status.NEW, backend=backend
         )
-        if id:
-            queryset = queryset.filter(id=id)
+        if extra_filter:
+            queryset = queryset.filter(**extra_filter)
         smses = list(
             queryset.select_for_update(skip_locked=True).values(
                 "id", "short_message", "params"

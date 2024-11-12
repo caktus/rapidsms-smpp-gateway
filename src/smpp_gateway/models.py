@@ -91,12 +91,16 @@ class MTMessage(AbstractTimestampModel, models.Model):
     short_message = models.TextField(_("short message"))
     params = models.JSONField(_("params"))
     status = models.CharField(_("status"), max_length=32, choices=Status.choices)
+    is_transactional = models.BooleanField(null=True)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.status == MTMessage.Status.NEW:
+            notify_sql = f"NOTIFY {self.backend.name}"
+            if self.is_transactional:
+                notify_sql += f", '{self.pk}'"
             with connection.cursor() as curs:
-                curs.execute(f"NOTIFY {self.backend.name}, '{self.pk}'")
+                curs.execute(notify_sql)
 
     def __str__(self):
         return f"{self.short_message} ({self.id})"

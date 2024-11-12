@@ -175,12 +175,19 @@ class PgSmppClient(smpplib.client.Client):
             logger.info(f"Got NOTIFY:{notify}")
             if self.listen_transactional_mt_messages_only:
                 if notify.payload.isdigit():
-                    self.send_mt_messages(id=int(notify.payload))
+                    self.send_mt_messages(
+                        extra_filter={
+                            "id": int(notify.payload),
+                            "is_transactional": True,
+                        }
+                    )
             else:
                 self.send_mt_messages()
 
-    def send_mt_messages(self, id=None):
-        smses = get_mt_messages_to_send(limit=100, backend=self.backend, id=id)
+    def send_mt_messages(self, extra_filter=None):
+        smses = get_mt_messages_to_send(
+            limit=100, backend=self.backend, extra_filter=extra_filter
+        )
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -231,7 +238,10 @@ class PgSmppClient(smpplib.client.Client):
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
         self.logger.info("Entering main listen loop")
         # Look for and send up to 100 messages on start up
-        self.send_mt_messages()
+        extra_messages_filter = None
+        if self.listen_transactional_mt_messages_only:
+            extra_messages_filter = {"is_transactional": True}
+        self.send_mt_messages(extra_filter=extra_messages_filter)
         while True:
             # When either main socket has data or _pg_conn has data, select.select will return
             rlist, _, _ = select.select(
@@ -242,7 +252,7 @@ class PgSmppClient(smpplib.client.Client):
                 pdu = smpplib.smpp.make_pdu("enquire_link", client=self)
                 self.send_pdu(pdu)
                 # Look for and send up to 100 messages every 5 seconds
-                self.send_mt_messages()
+                self.send_mt_messages(extra_filter=extra_messages_filter)
                 continue
             elif not rlist:
                 # backwards-compatible with existing behavior

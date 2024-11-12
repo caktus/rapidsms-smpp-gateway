@@ -84,31 +84,65 @@ class TestGetMessagesToSend:
             else:
                 assert message.status == MTMessage.Status.NEW
 
-    def test_filter_by_message_id(self):
-        """If a message ID is provided, only return that one message."""
+    def test_filter_by_message_id_and_is_transactional(self):
+        """If an `extra_filter` dictionary is provided with a message ID and
+        is_transactional = True, only return that one transactional message.
+        """
         backend = BackendFactory()
         all_new_messages = MTMessageFactory.create_batch(
-            5, backend=backend, status=MTMessage.Status.NEW
+            5, backend=backend, status=MTMessage.Status.NEW, is_transactional=True
         )
         first_id = all_new_messages[0].id
 
-        messages = get_mt_messages_to_send(5, backend, id=first_id)
+        messages = get_mt_messages_to_send(
+            5, backend, extra_filter={"id": first_id, "is_transactional": True}
+        )
 
         assert len(messages) == 1
         assert messages[0]["id"] == first_id
         assert len(all_new_messages) == 5
 
-    def test_filter_by_message_id_not_new(self):
-        """If a message ID is provided and that message's status is not NEW,
-        no messages are returned.
+    def test_filter_by_message_id_and_is_transactional_but_not_new(self):
+        """If an `extra_filter` dictionary is provided with a message ID and
+        is_transactional = True, but that message's status is not NEW, no messages
+        are returned.
         """
         backend = BackendFactory()
-        message = MTMessageFactory(backend=backend, status=MTMessage.Status.SENDING)
-        MTMessageFactory.create_batch(4, backend=backend, status=MTMessage.Status.NEW)
+        message = MTMessageFactory(
+            backend=backend, status=MTMessage.Status.SENDING, is_transactional=True
+        )
+        MTMessageFactory.create_batch(
+            4, backend=backend, status=MTMessage.Status.NEW, is_transactional=True
+        )
 
-        messages = get_mt_messages_to_send(5, backend, id=message.id)
+        messages = get_mt_messages_to_send(
+            5, backend, extra_filter={"id": message.id, "is_transactional": True}
+        )
 
         assert len(messages) == 0
+
+    def test_filter_by_is_transactional(self):
+        """If an `extra_filter` dictionary is provided with is_transactional = True
+        only return NEW transactional messages.
+        """
+        backend = BackendFactory()
+        transational_new = MTMessageFactory.create_batch(
+            2, backend=backend, status=MTMessage.Status.NEW, is_transactional=True
+        )
+        # Status is NEW but not transactional
+        MTMessageFactory.create_batch(
+            2, backend=backend, status=MTMessage.Status.NEW, is_transactional=False
+        )
+        # Transactional but status is not NEW
+        MTMessageFactory.create_batch(
+            2, backend=backend, status=MTMessage.Status.SENDING, is_transactional=True
+        )
+
+        messages = get_mt_messages_to_send(
+            5, backend, extra_filter={"is_transactional": True}
+        )
+
+        assert {i.id for i in transational_new} == {i["id"] for i in messages}
 
 
 @pytest.mark.django_db
