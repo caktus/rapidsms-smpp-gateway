@@ -1,11 +1,11 @@
 import logging
 
-from typing import Any, Union
+from typing import Any
 
 import psycopg2.extensions
 
 from django.db import connection, transaction
-from django.db.models import QuerySet
+from django.db.models import F, QuerySet
 from rapidsms.models import Backend
 
 from smpp_gateway.models import MOMessage, MTMessage
@@ -38,23 +38,17 @@ def pg_notify(channel: str):
         cursor.execute(f"NOTIFY {channel};")
 
 
-def get_mt_messages_to_send(
-    limit: int, backend: Backend, extra_filter: Union[dict, None] = None
-) -> list[dict[str, Any]]:
+def get_mt_messages_to_send(limit: int, backend: Backend) -> list[dict[str, Any]]:
     """Fetches up to `limit` messages intended for `backend`, updates their
-    status to SENDING, and returns select fields from the model. If `extra_filter`
-    is provided, it is used to further filter the queryset.
+    status to SENDING, and returns select fields from the model. The messages
+    are sorted by descending `priority_flag`.
     """
     with transaction.atomic():
-        queryset = MTMessage.objects.filter(
-            status=MTMessage.Status.NEW, backend=backend
-        )
-        if extra_filter:
-            queryset = queryset.filter(**extra_filter)
         smses = list(
-            queryset.select_for_update(skip_locked=True).values(
-                "id", "short_message", "params"
-            )[:limit]
+            MTMessage.objects.filter(status=MTMessage.Status.NEW, backend=backend)
+            .select_for_update(skip_locked=True)
+            .order_by(F("priority_flag").desc(nulls_last=True))
+            .values("id", "short_message", "params", "priority_flag")[:limit]
         )
         if smses:
             pks = [sms["id"] for sms in smses]

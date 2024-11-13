@@ -37,27 +37,16 @@ class SMPPGatewayBackend(BackendBase):
                 "short_message": text,
                 "params": params,
                 "status": MTMessage.Status.NEW,
-                "is_transactional": context.get("is_transactional"),
+                "priority_flag": context.get("priority_flag"),
             }
 
     def send(self, id_, text, identities, context=None):
         logger.debug("Sending message: %s", text)
-        import pprint
-
-        print("context:", pprint.pformat(context))
         context = context or {}
         kwargs_generator = self.prepare_request(id_, text, identities, context)
         for kwargs_group in grouper(kwargs_generator, self.send_group_size):
-            messages = MTMessage.objects.bulk_create(
+            MTMessage.objects.bulk_create(
                 [MTMessage(**kwargs) for kwargs in kwargs_group]
             )
-            print("notifying", self.model.name)
-            notify_sql = f"NOTIFY {self.model.name}"
             with connection.cursor() as curs:
-                if context.get("is_transactional"):
-                    # Notify for each message, including the message ID as the payload.
-                    # For transactional messages there should be only one message anyway
-                    for message in messages:
-                        curs.execute(notify_sql + f", '{message.pk}'")
-                else:
-                    curs.execute(notify_sql)
+                curs.execute(f"NOTIFY {self.model.name}")

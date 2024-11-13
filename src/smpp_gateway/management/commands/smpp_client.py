@@ -82,11 +82,13 @@ class Command(BaseCommand):
             "If set, --hc-ping-key must also be set.",
         )
         parser.add_argument(
-            "--listen-transactional-mt-messages-only",
+            "--set-priority-flag",
             action=argparse.BooleanOptionalAction,
             default=False,
-            help="Only listen for transactional MT messages and don't do bulk "
-            "sending.",
+            help="Whether to set the `priority_flag` param in the PDU, if one "
+            "is provided for a message. If a priority_flag is included in "
+            "--submit-sm-params, the priority_flag set on the individual "
+            "message will take precedence.",
         )
 
     def handle(self, *args, **options):

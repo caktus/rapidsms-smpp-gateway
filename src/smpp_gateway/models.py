@@ -84,6 +84,14 @@ class MTMessage(AbstractTimestampModel, models.Model):
         DELIVERED = "delivered", _("Delivered")
         ERROR = "error", _("Error")
 
+    class PriorityFlag(models.IntegerChoices):
+        # Based on the priority_flag values in the SMPP Spec
+        # https://smpp.org/SMPP_v3_4_Issue1_2.pdf
+        LEVEL_0 = 0, _("Level 0 (lowest) priority")
+        LEVEL_1 = 1, _("Level 1 priority")
+        LEVEL_2 = 2, _("Level 2 priority")
+        LEVEL_3 = 3, _("Level 3 (highest) priority")
+
     backend = models.ForeignKey(
         Backend, on_delete=models.PROTECT, verbose_name=_("backend")
     )
@@ -91,16 +99,15 @@ class MTMessage(AbstractTimestampModel, models.Model):
     short_message = models.TextField(_("short message"))
     params = models.JSONField(_("params"))
     status = models.CharField(_("status"), max_length=32, choices=Status.choices)
-    is_transactional = models.BooleanField(null=True)
+    priority_flag = models.IntegerField(
+        _("priority flag"), choices=PriorityFlag.choices, null=True
+    )
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.status == MTMessage.Status.NEW:
-            notify_sql = f"NOTIFY {self.backend.name}"
-            if self.is_transactional:
-                notify_sql += f", '{self.pk}'"
             with connection.cursor() as curs:
-                curs.execute(notify_sql)
+                curs.execute(f"NOTIFY {self.backend.name}")
 
     def __str__(self):
         return f"{self.short_message} ({self.id})"
@@ -110,7 +117,8 @@ class MTMessage(AbstractTimestampModel, models.Model):
         indexes = (
             models.Index(
                 # Allow for quick filtering of messages that need to be processed
-                fields=["status"],
+                "status",
+                models.F("priority_flag").desc(nulls_last=True),
                 name="mt_message_status_idx",
                 condition=models.Q(status="new"),  # No way to access Status.NEW here?
             ),
