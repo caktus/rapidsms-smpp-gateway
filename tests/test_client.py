@@ -182,6 +182,7 @@ class TestSetPriorityFlag:
             backend,
             submit_sm_params or {},
             set_priority_flag,
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
