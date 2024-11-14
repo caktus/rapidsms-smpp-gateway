@@ -59,11 +59,13 @@ class MTMessageAdmin(admin.ModelAdmin):
     list_display = (
         "short_message",
         "backend",
+        "priority_flag",
         "status",
         "create_time",
     )
     list_filter = (
         "status",
+        "priority_flag",
         "backend",
         MTMessageCommandStatusListFilter,
     )
