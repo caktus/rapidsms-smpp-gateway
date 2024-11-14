@@ -14,7 +14,7 @@ def read_file(filename):
 if __name__ == "__main__":
     setuptools.setup(
         name="smpp_gateway",
-        version="1.3.0",
+        version="1.4.0",
         license="MIT",
         install_requires=[
             "RapidSMS>=2.0",
