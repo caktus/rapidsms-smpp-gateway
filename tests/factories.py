@@ -4,7 +4,7 @@ import smpplib.consts
 from django.utils.timezone import now
 from factory.django import DjangoModelFactory
 from faker import Faker
-from rapidsms.models import Backend
+from rapidsms.models import Backend, Connection
 
 from smpp_gateway.models import MOMessage, MTMessage, MTMessageStatus
 
@@ -59,3 +59,11 @@ class MTMessageStatusFactory(DjangoModelFactory):
     command_status = smpplib.consts.SMPP_ESME_ROK
     message_id = ""
     delivery_report = b""
+
+
+class ConnectionFactory(DjangoModelFactory):
+    class Meta:
+        model = Connection
+
+    backend = factory.SubFactory(BackendFactory)
+    identity = factory.Faker("word")
