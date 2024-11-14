@@ -32,10 +32,12 @@ class PriorityBlockingRouter(BlockingRouter):
     outgoing_message_class = PriorityOutgoingMessage
 
     def new_incoming_message(
-        self, text, connections, class_=incoming_message_class, **kwargs
+        self, text, connections, class_=None, **kwargs
     ):
-        return super().new_incoming_message(
-            text, connections, class_=PriorityIncomingMessage, **kwargs
+        if class_ is None:
+            class_ = self.incoming_message_class
+        self.return super().new_incoming_message(
+            text, connections, class_=class_, **kwargs
         )
 
     def new_outgoing_message(
