@@ -69,6 +69,7 @@ class PgSmppClient(smpplib.client.Client):
         backend: Backend,
         hc_worker: HealthchecksIoWorker,
         submit_sm_params: dict,
+        set_priority_flag: bool,
         mt_messages_per_second: int,
         *args,
         **kwargs,
@@ -78,6 +79,7 @@ class PgSmppClient(smpplib.client.Client):
         self.backend = backend
         self.hc_worker = hc_worker
         self.submit_sm_params = submit_sm_params
+        self.set_priority_flag = set_priority_flag
         self.mt_messages_per_second = mt_messages_per_second
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
@@ -182,6 +184,8 @@ class PgSmppClient(smpplib.client.Client):
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
+            if self.set_priority_flag and sms["priority_flag"] is not None:
+                params["priority_flag"] = sms["priority_flag"]
             pdus = self.split_and_send_message(sms["short_message"], **params)
             # Create placeholder MTMessageStatus objects in the DB, which
             # the message_sent handler will later update with the actual command_status

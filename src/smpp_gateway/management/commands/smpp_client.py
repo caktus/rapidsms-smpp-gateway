@@ -1,3 +1,4 @@
+import argparse
 import os
 
 from django.core.management.base import BaseCommand
@@ -84,6 +85,15 @@ class Command(BaseCommand):
             default=os.environ.get("HEALTHCHECKS_IO_CHECK_SLUG"),
             help="Pings healthchecks.io with the specified ping key and check slug. "
             "If set, --hc-ping-key must also be set.",
+        )
+        parser.add_argument(
+            "--set-priority-flag",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Whether to set the `priority_flag` param in the PDU, if one "
+            "is provided for a message. If a priority_flag is included in "
+            "--submit-sm-params, the priority_flag set on the individual "
+            "message will take precedence.",
         )
 
     def handle(self, *args, **options):
