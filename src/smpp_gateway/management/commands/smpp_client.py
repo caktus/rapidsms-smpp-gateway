@@ -52,6 +52,11 @@ class Command(BaseCommand):
             default=os.environ.get("SMPPLIB_SUBMIT_SM_PARAMS", r"{}"),
         )
         parser.add_argument(
+            "--mt-messages-per-second",
+            type=int,
+            default=os.environ.get("SMPPLIB_MT_MESSAGES_PER_SECOND", 20),
+        )
+        parser.add_argument(
             "--database-url",
             default=os.environ.get("DATABASE_URL"),
         )
