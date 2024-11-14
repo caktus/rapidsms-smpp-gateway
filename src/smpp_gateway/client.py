@@ -70,6 +70,7 @@ class PgSmppClient(smpplib.client.Client):
         hc_worker: HealthchecksIoWorker,
         submit_sm_params: dict,
         set_priority_flag: bool,
+        mt_messages_per_second: int,
         *args,
         **kwargs,
     ):
@@ -79,6 +80,7 @@ class PgSmppClient(smpplib.client.Client):
         self.hc_worker = hc_worker
         self.submit_sm_params = submit_sm_params
         self.set_priority_flag = set_priority_flag
+        self.mt_messages_per_second = mt_messages_per_second
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
 
@@ -174,7 +176,11 @@ class PgSmppClient(smpplib.client.Client):
             self.send_mt_messages()
 
     def send_mt_messages(self):
-        smses = get_mt_messages_to_send(limit=100, backend=self.backend)
+        limit = self.mt_messages_per_second * self.timeout
+        smses = get_mt_messages_to_send(limit=limit, backend=self.backend)
+        if len(smses) == 0:
+            return
+        logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -226,7 +232,7 @@ class PgSmppClient(smpplib.client.Client):
 
     def listen(self, ignore_error_codes=None, auto_send_enquire_link=True):
         self.logger.info("Entering main listen loop")
-        # Look for and send up to 100 messages on start up
+        # Look for and send messages on start up
         self.send_mt_messages()
         while True:
             # When either main socket has data or _pg_conn has data, select.select will return
@@ -237,7 +243,6 @@ class PgSmppClient(smpplib.client.Client):
                 self.logger.debug("Socket timeout, listening again")
                 pdu = smpplib.smpp.make_pdu("enquire_link", client=self)
                 self.send_pdu(pdu)
-                # Look for and send up to 100 messages every 5 seconds
                 self.send_mt_messages()
                 continue
             elif not rlist:

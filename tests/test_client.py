@@ -25,6 +25,7 @@ class TestMessageReceivedHandler:
             backend,
             {},  # submit_sm_params
             False,  # set_priority_flag
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -61,6 +62,7 @@ class TestMessageReceivedHandler:
             backend,
             {},  # submit_sm_params
             False,  # set_priority_flag
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -103,6 +105,7 @@ class TestMessageReceivedHandler:
             backend,
             {},  # submit_sm_params
             False,  # set_priority_flag
+            20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -141,6 +144,7 @@ def test_message_sent_handler():
         backend,
         {},  # submit_sm_params
         False,  # set_priority_flag
+        20,  # mt_messages_per_second
         "",  # hc_check_uuid
         "",  # hc_ping_key
         "",  # hc_check_slug
