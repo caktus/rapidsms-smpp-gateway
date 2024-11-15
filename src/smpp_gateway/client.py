@@ -173,7 +173,7 @@ class PgSmppClient(smpplib.client.Client):
             logger.info(f"Got NOTIFY:{notify}")
             self.send_mt_messages()
 
-    def send_mt_messages(self):
+    def _send_mt_messages(self):
         limit = self.mt_messages_per_second * self.timeout
         smses = get_mt_messages_to_send(limit=limit, backend=self.backend)
         if len(smses) == 0:
@@ -205,6 +205,32 @@ class PgSmppClient(smpplib.client.Client):
             modify_time=timezone.now(),
         )
         MTMessageStatus.objects.bulk_create(submit_sm_resps)
+
+    def get_new_mt_messages_per_second(self):
+        """Get a new value for self.mt_messages_per_second after a timeout."""
+        return int(self.mt_messages_per_second * 0.75)
+
+    def send_mt_messages(self):
+        try:
+            self._send_mt_messages()
+        except smpplib.exceptions.ConnectionError as e:
+            # The smpplib base Client catches socket.error (which is OSError,
+            # the base class of TimeoutError) and raises a ConnectionError.
+            # Check if the original error was a TimeoutError and reduce the
+            # sending rate if possible
+            if (
+                isinstance(e.__context__, TimeoutError)
+                and (new_msgs_per_sec := self.get_new_mt_messages_per_second()) > 0
+            ):
+                logger.warning(
+                    "A timeout occurred while sending messages, and the sending "
+                    f"rate was adjusted from {self.mt_messages_per_second}/sec "
+                    f"to {new_msgs_per_sec}/sec.",
+                    exc_info=True,
+                )
+                self.mt_messages_per_second = new_msgs_per_sec
+            else:
+                raise
 
     def split_and_send_message(self, message, **kwargs):
         """

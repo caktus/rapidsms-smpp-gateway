@@ -1,4 +1,9 @@
+import socket
+
+from unittest import mock
+
 import pytest
+import smpplib.exceptions
 
 from smpplib import consts as smpplib_consts
 from smpplib.command import DeliverSM, SubmitSMResp
@@ -157,3 +162,55 @@ def test_message_sent_handler():
 
     assert outbound_msg_status.command_status == smpplib_consts.SMPP_ESME_RSUBMITFAIL
     assert outbound_msg_status.message_id == "qwerty"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mt_messages_per_second_adjustment_on_timeout():
+    """Tests that the sending rate is automatically reduced if a timeout is
+    encountered when the client is sending a message.
+    """
+    backend = BackendFactory()
+    client = get_smpplib_client(
+        "127.0.0.1",
+        8000,
+        "notify_mo_channel",
+        backend,
+        {},  # submit_sm_params
+        2,  # mt_messages_per_second
+        "",  # hc_check_uuid
+        "",  # hc_ping_key
+        "",  # hc_check_slug
+    )
+    MTMessageFactory.create_batch(20, status=MTMessage.Status.NEW, backend=backend)
+    timeout_patcher = mock.patch.object(
+        socket.socket,
+        "send",
+        side_effect=TimeoutError,
+    )
+    # Pretend the client is in a valid state for sending messages. The client
+    # checks this within send_pdu()
+    client.state = smpplib_consts.SMPP_CLIENT_STATE_BOUND_TX
+
+    # In case of a TimeoutError, the exception should be caught and
+    # client.mt_messages_per_second should be adjusted from 2 to 1
+    with timeout_patcher as mock_socket_send:
+        client.send_mt_messages()
+        mock_socket_send.assert_called()
+        assert client.mt_messages_per_second == 1
+        assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 0
+
+    # No timeout. client.mt_messages_per_second should not be adjusted further
+    with mock.patch.object(client, "send_pdu", return_value=True) as mock_send_pdu:
+        client.send_mt_messages()
+        mock_send_pdu.assert_called()
+        assert client.mt_messages_per_second == 1
+        # Should have sent 5 messages (client.mt_messages_per_second * client.timeout)
+        assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 5
+
+    # Another timeout occurs, but client.mt_messages_per_second cannot be reduced
+    # further, so the smpplib.exceptions.ConnectionError should be re-raised
+    with timeout_patcher as mock_socket_send:
+        with pytest.raises(smpplib.exceptions.ConnectionError):
+            client.send_mt_messages()
+        mock_socket_send.assert_called()
+        assert client.mt_messages_per_second == 1
