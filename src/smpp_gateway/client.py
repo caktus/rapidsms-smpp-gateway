@@ -185,6 +185,7 @@ class PgSmppClient(smpplib.client.Client):
         logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
         submit_sm_resps = []
         update_statuses = defaultdict(list)
+        adjusted_sending_rate = False
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
             if self.set_priority_flag and sms["priority_flag"] is not None:
@@ -193,29 +194,21 @@ class PgSmppClient(smpplib.client.Client):
                 pdus = self.split_and_send_message(sms["short_message"], **params)
             except Exception as e:
                 update_status_to = MTMessage.Status.ERROR
+                logger.exception(
+                    f"An error occurred when sending message ID {sms['id']}."
+                )
                 # The smpplib base Client catches socket.error (which is OSError,
                 # the base class of TimeoutError) and raises a ConnectionError.
                 # Check if the original error was a TimeoutError and reduce the
                 # sending rate for the next batch if possible
-                if isinstance(e, smpplib.exceptions.ConnectionError) and isinstance(
-                    e.__context__, TimeoutError
+                if (
+                    isinstance(e, smpplib.exceptions.ConnectionError)
+                    and isinstance(e.__context__, TimeoutError)
+                    and not adjusted_sending_rate
                 ):
-                    if (new_msgs_per_sec := self.get_new_mt_messages_per_second()) > 0:
-                        logger.warning(
-                            "A timeout occurred while sending a message, and the sending "
-                            f"rate has been adjusted from {self.mt_messages_per_second} "
-                            f"messages/sec to {new_msgs_per_sec} messages/sec for the "
-                            "next batch.",
-                            exc_info=True,
-                        )
-                        self.mt_messages_per_second = new_msgs_per_sec
-                    else:
-                        logger.exception(
-                            "A timeout occurred when sending a message, but "
-                            "the sending rate could not be automatically adjusted."
-                        )
-                else:
-                    logger.exception("An error occurred when sending a message.")
+                    adjusted_sending_rate = self.adjust_message_sending_rate_on_timeout(
+                        e, sms
+                    )
             else:
                 update_status_to = MTMessage.Status.SENT
                 # Create placeholder MTMessageStatus objects in the DB, which
@@ -236,7 +229,7 @@ class PgSmppClient(smpplib.client.Client):
                 )
             update_statuses[update_status_to].append(sms["id"])
         for status, pks in update_statuses.items():
-            logger.info(f"Updating {len(pks)} messages to {status} status")
+            logger.info(f"Updating {len(pks)} messages to {status.name} status")
             MTMessage.objects.filter(pk__in=pks).update(
                 status=status,
                 modify_time=timezone.now(),
@@ -247,6 +240,24 @@ class PgSmppClient(smpplib.client.Client):
     def get_new_mt_messages_per_second(self):
         """Get a new value for self.mt_messages_per_second after a timeout."""
         return int(self.mt_messages_per_second * 0.75)
+
+    def adjust_message_sending_rate_on_timeout(self, exception, sms):
+        if (new_msgs_per_sec := self.get_new_mt_messages_per_second()) > 0:
+            logger.warning(
+                f"A timeout occurred while sending a message, and the sending "
+                f"rate has been adjusted from {self.mt_messages_per_second} "
+                f"messages/sec to {new_msgs_per_sec} messages/sec for the "
+                "next batch.",
+                exc_info=exception,
+            )
+            self.mt_messages_per_second = new_msgs_per_sec
+            return True
+        logger.exception(
+            "A timeout occurred when sending a message, but the sending rate "
+            "could not be automatically adjusted.",
+            exc_info=exception,
+        )
+        return False
 
     def split_and_send_message(self, message, **kwargs):
         """
