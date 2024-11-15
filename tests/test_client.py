@@ -308,10 +308,10 @@ def test_mt_messages_per_second_adjustment_on_timeout():
 
     # Another timeout occurs, but client.mt_messages_per_second cannot be reduced
     # further
-    # with timeout_patcher as mock_socket_send:
-    # client.send_mt_messages()
-    # mock_socket_send.assert_called()
-    # assert client.mt_messages_per_second == 1
+    with timeout_patcher as mock_socket_send:
+        client.send_mt_messages()
+        mock_socket_send.assert_called()
+        assert client.mt_messages_per_second == 1
 
 
 @pytest.mark.django_db(transaction=True)
