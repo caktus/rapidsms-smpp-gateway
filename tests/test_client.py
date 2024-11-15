@@ -3,7 +3,6 @@ import socket
 from unittest import mock
 
 import pytest
-import smpplib.exceptions
 
 from smpplib import consts as smpplib_consts
 from smpplib.command import DeliverSM, SubmitSMResp
@@ -338,13 +337,9 @@ def test_messages_not_left_in_sending_status_on_exceptions():
     )
     side_effect = []
     expected_sent = set()
-    expected_new = set()
     expected_error = set()
     for index, message in enumerate(messages):
-        if index in (2, 6):
-            side_effect.append(smpplib.exceptions.ConnectionError)
-            expected_new.add(message.id)
-        elif index in (4, 9):
+        if index in (2, 4, 6, 9):
             side_effect.append(Exception(f"error {index}"))
             expected_error.add(message.id)
         else:
@@ -360,7 +355,6 @@ def test_messages_not_left_in_sending_status_on_exceptions():
     assert not MTMessage.objects.filter(status=MTMessage.Status.SENDING).exists()
     qs = MTMessage.objects.values_list("id", flat=True)
     assert expected_error == set(qs.filter(status=MTMessage.Status.ERROR))
-    assert expected_new == set(qs.filter(status=MTMessage.Status.NEW))
     assert expected_sent == set(qs.filter(status=MTMessage.Status.SENT))
     assert expected_sent == set(
         MTMessageStatus.objects.values_list("mt_message", flat=True)

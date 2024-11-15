@@ -185,37 +185,37 @@ class PgSmppClient(smpplib.client.Client):
         logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
         submit_sm_resps = []
         update_statuses = defaultdict(list)
-        new_msgs_per_sec = None
-        adjust_msgs_per_sec = False
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
             if self.set_priority_flag and sms["priority_flag"] is not None:
                 params["priority_flag"] = sms["priority_flag"]
             try:
                 pdus = self.split_and_send_message(sms["short_message"], **params)
-            except smpplib.exceptions.ConnectionError as e:
-                # We'll reset to NEW status so we can retry in another batch
-                update_status_to = MTMessage.Status.NEW
+            except Exception as e:
+                update_status_to = MTMessage.Status.ERROR
                 # The smpplib base Client catches socket.error (which is OSError,
                 # the base class of TimeoutError) and raises a ConnectionError.
                 # Check if the original error was a TimeoutError and reduce the
                 # sending rate for the next batch if possible
-                if isinstance(e.__context__, TimeoutError):
-                    if not adjust_msgs_per_sec:
-                        if (
-                            new_msgs_per_sec := self.get_new_mt_messages_per_second()
-                        ) > 0:
-                            adjust_msgs_per_sec = e
-                        else:
-                            logger.exception(
-                                "A timeout occurred when sending a message, but "
-                                "the sending rate could not be automatically adjusted."
-                            )
+                if isinstance(e, smpplib.exceptions.ConnectionError) and isinstance(
+                    e.__context__, TimeoutError
+                ):
+                    if (new_msgs_per_sec := self.get_new_mt_messages_per_second()) > 0:
+                        logger.warning(
+                            "A timeout occurred while sending a message, and the sending "
+                            f"rate has been adjusted from {self.mt_messages_per_second} "
+                            f"messages/sec to {new_msgs_per_sec} messages/sec for the "
+                            "next batch.",
+                            exc_info=True,
+                        )
+                        self.mt_messages_per_second = new_msgs_per_sec
+                    else:
+                        logger.exception(
+                            "A timeout occurred when sending a message, but "
+                            "the sending rate could not be automatically adjusted."
+                        )
                 else:
                     logger.exception("An error occurred when sending a message.")
-            except Exception:
-                update_status_to = MTMessage.Status.ERROR
-                logger.exception("An error occurred when sending a message.")
             else:
                 update_status_to = MTMessage.Status.SENT
                 # Create placeholder MTMessageStatus objects in the DB, which
@@ -243,14 +243,6 @@ class PgSmppClient(smpplib.client.Client):
             )
         if submit_sm_resps:
             MTMessageStatus.objects.bulk_create(submit_sm_resps)
-        if adjust_msgs_per_sec:
-            logger.warning(
-                "A timeout occurred while sending a message, and the sending "
-                f"rate was adjusted from {self.mt_messages_per_second} "
-                f"messages/sec to {new_msgs_per_sec} messages/sec.",
-                exc_info=adjust_msgs_per_sec,
-            )
-            self.mt_messages_per_second = new_msgs_per_sec
 
     def get_new_mt_messages_per_second(self):
         """Get a new value for self.mt_messages_per_second after a timeout."""
