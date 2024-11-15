@@ -67,7 +67,8 @@ class Command(BaseCommand):
             type=int,
             default=os.environ.get("SMPPLIB_EVENT_LOOP_TIMEOUT", 5),
             help="Timeout for listening for Postgres notifications and new "
-            "incoming messages.",
+            "incoming messages. This is also the time between enquire_link "
+            "PDUs sent to the SMPP server when there is no other traffic.",
         )
         parser.add_argument(
             "--database-url",
