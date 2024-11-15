@@ -60,7 +60,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "--socket-timeout",
             type=int,
-            default=os.environ.get("SMPPLIB_SOCKET_TIMEOUT", 5),
+            default=os.environ.get("SMPPLIB_SOCKET_TIMEOUT", 30),
+        )
+        parser.add_argument(
+            "--event-loop-timeout",
+            type=int,
+            default=os.environ.get("SMPPLIB_EVENT_LOOP_TIMEOUT", 5),
+            help="Timeout for listening for Postgres notifications and new "
+            "incoming messages.",
         )
         parser.add_argument(
             "--database-url",

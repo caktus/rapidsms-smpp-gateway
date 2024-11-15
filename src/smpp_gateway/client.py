@@ -71,6 +71,7 @@ class PgSmppClient(smpplib.client.Client):
         submit_sm_params: dict,
         set_priority_flag: bool,
         mt_messages_per_second: int,
+        event_loop_timeout: int,
         *args,
         **kwargs,
     ):
@@ -81,6 +82,7 @@ class PgSmppClient(smpplib.client.Client):
         self.submit_sm_params = submit_sm_params
         self.set_priority_flag = set_priority_flag
         self.mt_messages_per_second = mt_messages_per_second
+        self.event_loop_timeout = event_loop_timeout
         super().__init__(*args, **kwargs)
         self._pg_conn = pg_listen(self.backend.name)
 
@@ -176,11 +178,13 @@ class PgSmppClient(smpplib.client.Client):
             self.send_mt_messages()
 
     def send_mt_messages(self):
-        limit = self.mt_messages_per_second * self.timeout
+        limit = self.mt_messages_per_second * self.event_loop_timeout
         smses = get_mt_messages_to_send(limit=limit, backend=self.backend)
         if len(smses) == 0:
             return
-        logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
+        logger.info(
+            f"Found {len(smses)} messages to send in {self.event_loop_timeout} seconds"
+        )
         submit_sm_resps = []
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -237,7 +241,7 @@ class PgSmppClient(smpplib.client.Client):
         while True:
             # When either main socket has data or _pg_conn has data, select.select will return
             rlist, _, _ = select.select(
-                [self._socket, self._pg_conn], [], [], self.timeout
+                [self._socket, self._pg_conn], [], [], self.event_loop_timeout
             )
             if not rlist and auto_send_enquire_link:
                 self.logger.debug("Socket timeout, listening again")
