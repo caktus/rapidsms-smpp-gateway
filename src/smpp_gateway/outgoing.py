@@ -16,6 +16,8 @@ class SMPPGatewayBackend(BackendBase):
     # Optional additional params from:
     # https://github.com/python-smpplib/python-smpplib/blob/d9d91beb2d7f37915b13a064bb93f907379342ec/smpplib/command.py#L652-L700
     OPTIONAL_PARAMS = ("source_addr",)
+    # The minimum priority_flag value for which to send a Postgres notification
+    minimum_notify_priority_flag = MTMessage.PriorityFlag.LEVEL_2.value
 
     def configure(self, **kwargs):
         self.send_group_size = kwargs.get("send_group_size", 100)
@@ -48,5 +50,5 @@ class SMPPGatewayBackend(BackendBase):
             MTMessage.objects.bulk_create(
                 [MTMessage(**kwargs) for kwargs in kwargs_group]
             )
-            if context.get("priority_flag", 0) >= MTMessage.PriorityFlag.LEVEL_2.value:
+            if context.get("priority_flag", 0) >= self.minimum_notify_priority_flag:
                 pg_notify(self.model.name)
