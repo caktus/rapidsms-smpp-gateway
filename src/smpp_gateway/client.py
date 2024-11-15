@@ -2,6 +2,8 @@ import logging
 import select
 import socket
 
+from collections import defaultdict
+
 import smpplib
 import smpplib.client
 import smpplib.consts
@@ -175,66 +177,84 @@ class PgSmppClient(smpplib.client.Client):
             logger.info(f"Got NOTIFY:{notify}")
             self.send_mt_messages()
 
-    def _send_mt_messages(self):
+    def send_mt_messages(self):
         limit = self.mt_messages_per_second * self.timeout
         smses = get_mt_messages_to_send(limit=limit, backend=self.backend)
         if len(smses) == 0:
             return
         logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
         submit_sm_resps = []
+        update_statuses = defaultdict(list)
+        new_msgs_per_sec = None
+        adjust_msgs_per_sec = False
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
             if self.set_priority_flag and sms["priority_flag"] is not None:
                 params["priority_flag"] = sms["priority_flag"]
-            pdus = self.split_and_send_message(sms["short_message"], **params)
-            # Create placeholder MTMessageStatus objects in the DB, which
-            # the message_sent handler will later update with the actual command_status
-            # and message_id (and eventually maybe a delivery report).
-            now = timezone.now()
-            submit_sm_resps.extend(
-                [
-                    MTMessageStatus(
-                        create_time=now,
-                        modify_time=now,
-                        mt_message_id=sms["id"],
-                        backend=self.backend,
-                        sequence_number=pdu.sequence,
-                    )
-                    for pdu in pdus
-                ]
+            try:
+                pdus = self.split_and_send_message(sms["short_message"], **params)
+            except smpplib.exceptions.ConnectionError as e:
+                # We'll reset to NEW status so we can retry in another batch
+                update_status_to = MTMessage.Status.NEW
+                # The smpplib base Client catches socket.error (which is OSError,
+                # the base class of TimeoutError) and raises a ConnectionError.
+                # Check if the original error was a TimeoutError and reduce the
+                # sending rate for the next batch if possible
+                if isinstance(e.__context__, TimeoutError):
+                    if not adjust_msgs_per_sec:
+                        if (
+                            new_msgs_per_sec := self.get_new_mt_messages_per_second()
+                        ) > 0:
+                            adjust_msgs_per_sec = e
+                        else:
+                            logger.exception(
+                                "A timeout occurred when sending a message, but "
+                                "the sending rate could not be automatically adjusted."
+                            )
+                else:
+                    logger.exception("An error occurred when sending a message.")
+            except Exception:
+                update_status_to = MTMessage.Status.ERROR
+                logger.exception("An error occurred when sending a message.")
+            else:
+                update_status_to = MTMessage.Status.SENT
+                # Create placeholder MTMessageStatus objects in the DB, which
+                # the message_sent handler will later update with the actual command_status
+                # and message_id (and eventually maybe a delivery report).
+                now = timezone.now()
+                submit_sm_resps.extend(
+                    [
+                        MTMessageStatus(
+                            create_time=now,
+                            modify_time=now,
+                            mt_message_id=sms["id"],
+                            backend=self.backend,
+                            sequence_number=pdu.sequence,
+                        )
+                        for pdu in pdus
+                    ]
+                )
+            update_statuses[update_status_to].append(sms["id"])
+        for status, pks in update_statuses.items():
+            logger.info(f"Updating {len(pks)} messages to {status} status")
+            MTMessage.objects.filter(pk__in=pks).update(
+                status=status,
+                modify_time=timezone.now(),
             )
-        pks = [sms["id"] for sms in smses]
-        MTMessage.objects.filter(pk__in=pks).update(
-            status=MTMessage.Status.SENT,
-            modify_time=timezone.now(),
-        )
-        MTMessageStatus.objects.bulk_create(submit_sm_resps)
+        if submit_sm_resps:
+            MTMessageStatus.objects.bulk_create(submit_sm_resps)
+        if adjust_msgs_per_sec:
+            logger.warning(
+                "A timeout occurred while sending a message, and the sending "
+                f"rate was adjusted from {self.mt_messages_per_second} "
+                f"messages/sec to {new_msgs_per_sec} messages/sec.",
+                exc_info=adjust_msgs_per_sec,
+            )
+            self.mt_messages_per_second = new_msgs_per_sec
 
     def get_new_mt_messages_per_second(self):
         """Get a new value for self.mt_messages_per_second after a timeout."""
         return int(self.mt_messages_per_second * 0.75)
-
-    def send_mt_messages(self):
-        try:
-            self._send_mt_messages()
-        except smpplib.exceptions.ConnectionError as e:
-            # The smpplib base Client catches socket.error (which is OSError,
-            # the base class of TimeoutError) and raises a ConnectionError.
-            # Check if the original error was a TimeoutError and reduce the
-            # sending rate if possible
-            if (
-                isinstance(e.__context__, TimeoutError)
-                and (new_msgs_per_sec := self.get_new_mt_messages_per_second()) > 0
-            ):
-                logger.warning(
-                    "A timeout occurred while sending messages, and the sending "
-                    f"rate was adjusted from {self.mt_messages_per_second}/sec "
-                    f"to {new_msgs_per_sec}/sec.",
-                    exc_info=True,
-                )
-                self.mt_messages_per_second = new_msgs_per_sec
-            else:
-                raise
 
     def split_and_send_message(self, message, **kwargs):
         """
