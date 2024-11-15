@@ -84,6 +84,21 @@ class TestGetMessagesToSend:
             else:
                 assert message.status == MTMessage.Status.NEW
 
+    def test_messages_sorted_by_priority_flag(self):
+        """Tests that messages are sorted by descending priority_flag, and
+        messages with null priority_flag come last.
+        """
+        backend = BackendFactory()
+        MTMessageFactory(backend=backend, priority_flag=MTMessage.PriorityFlag.LEVEL_2)
+        MTMessageFactory(backend=backend, priority_flag=MTMessage.PriorityFlag.LEVEL_0)
+        MTMessageFactory(backend=backend, priority_flag=None)
+        MTMessageFactory(backend=backend, priority_flag=MTMessage.PriorityFlag.LEVEL_1)
+        MTMessageFactory(backend=backend, priority_flag=MTMessage.PriorityFlag.LEVEL_3)
+
+        messages = get_mt_messages_to_send(10, backend)
+
+        assert [3, 2, 1, 0, None] == [i["priority_flag"] for i in messages]
+
 
 @pytest.mark.django_db
 class TestGetMessagesToProcess:

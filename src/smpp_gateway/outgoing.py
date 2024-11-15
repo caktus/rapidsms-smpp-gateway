@@ -37,6 +37,7 @@ class SMPPGatewayBackend(BackendBase):
                 "short_message": text,
                 "params": params,
                 "status": MTMessage.Status.NEW,
+                "priority_flag": context.get("priority_flag"),
             }
 
     def send(self, id_, text, identities, context=None):

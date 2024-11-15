@@ -5,7 +5,7 @@ from typing import Any
 import psycopg2.extensions
 
 from django.db import connection, transaction
-from django.db.models import QuerySet
+from django.db.models import F, QuerySet
 from rapidsms.models import Backend
 
 from smpp_gateway.models import MOMessage, MTMessage
@@ -40,13 +40,15 @@ def pg_notify(channel: str):
 
 def get_mt_messages_to_send(limit: int, backend: Backend) -> list[dict[str, Any]]:
     """Fetches up to `limit` messages intended for `backend`, updates their
-    status to SENDING, and returns select fields from the model.
+    status to SENDING, and returns select fields from the model. The messages
+    are sorted by descending `priority_flag`.
     """
     with transaction.atomic():
         smses = list(
             MTMessage.objects.filter(status=MTMessage.Status.NEW, backend=backend)
             .select_for_update(skip_locked=True)
-            .values("id", "short_message", "params")[:limit]
+            .order_by(F("priority_flag").desc(nulls_last=True))
+            .values("id", "short_message", "params", "priority_flag")[:limit]
         )
         if smses:
             pks = [sms["id"] for sms in smses]

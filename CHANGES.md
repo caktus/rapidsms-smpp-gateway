@@ -1,5 +1,10 @@
 # Changes
 
+## 1.4.0 (November 14, 2024)
+
+- Send high priority transactional messages before bulk messages (#25)
+- Allow MT message send rate to be configured (#22)
+
 ## 1.3.0 (November 5, 2024)
 
 - Handle message decoding more safely (#20)

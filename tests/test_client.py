@@ -10,7 +10,7 @@ from smpplib.command import DeliverSM, SubmitSMResp
 
 from smpp_gateway.models import MOMessage, MTMessage
 from smpp_gateway.queries import pg_listen
-from smpp_gateway.smpp import get_smpplib_client
+from smpp_gateway.smpp import PgSmppClient, get_smpplib_client
 from tests.factories import BackendFactory, MTMessageFactory, MTMessageStatusFactory
 
 
@@ -27,6 +27,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # set_priority_flag
             20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
@@ -63,6 +64,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # set_priority_flag
             20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
@@ -105,6 +107,7 @@ class TestMessageReceivedHandler:
             "notify_mo_channel",
             backend,
             {},  # submit_sm_params
+            False,  # set_priority_flag
             20,  # mt_messages_per_second
             "",  # hc_check_uuid
             "",  # hc_ping_key
@@ -143,6 +146,7 @@ def test_message_sent_handler():
         "notify_mo_channel",
         backend,
         {},  # submit_sm_params
+        False,  # set_priority_flag
         20,  # mt_messages_per_second
         "",  # hc_check_uuid
         "",  # hc_ping_key
@@ -165,6 +169,101 @@ def test_message_sent_handler():
 
 
 @pytest.mark.django_db(transaction=True)
+@mock.patch.object(PgSmppClient, "send_message", return_value=mock.Mock(sequence=1))
+class TestSetPriorityFlag:
+    def get_client_and_message(
+        self,
+        submit_sm_params=None,
+        set_priority_flag=True,
+        message_priority_flag=MTMessage.PriorityFlag.LEVEL_1,
+    ):
+        backend = BackendFactory()
+        client = get_smpplib_client(
+            "127.0.0.1",
+            8000,
+            "notify_mo_channel",
+            backend,
+            submit_sm_params or {},
+            set_priority_flag,
+            20,  # mt_messages_per_second
+            "",  # hc_check_uuid
+            "",  # hc_ping_key
+            "",  # hc_check_slug
+        )
+        message = MTMessageFactory(
+            status=MTMessage.Status.NEW,
+            backend=backend,
+            priority_flag=message_priority_flag,
+        )
+        return client, message
+
+    def test_set_priority_flag_is_true(self, mock_send_message):
+        """If set_priority_flag is True and the priority_flag is set on a MTMessage
+        object, the priority_flag param should be set in the PDU.
+        """
+        client, message = self.get_client_and_message()
+        client.receive_pg_notify()
+
+        mock_send_message.assert_called_once()
+        assert (
+            mock_send_message.call_args.kwargs["priority_flag"] == message.priority_flag
+        )
+
+    def test_set_priority_flag_is_true_and_priority_in_submit_sm_params(
+        self, mock_send_message
+    ):
+        """If set_priority_flag is True and the priority_flag is set on a MTMessage
+        object and also in the submit_sm_params dictionary, the priority_flag from
+        the message object should take precendence.
+        """
+        client, message = self.get_client_and_message(
+            {"priority_flag": MTMessage.PriorityFlag.LEVEL_0}
+        )
+        client.receive_pg_notify()
+
+        mock_send_message.assert_called_once()
+        assert (
+            mock_send_message.call_args.kwargs["priority_flag"] == message.priority_flag
+        )
+
+    def test_set_priority_flag_is_true_but_priority_not_set(self, mock_send_message):
+        """If set_priority_flag is True and but the priority_flag is not set on a
+        MTMessage object, the priority_flag param should NOT be set in the PDU.
+        """
+        client = self.get_client_and_message(message_priority_flag=None)[0]
+        client.receive_pg_notify()
+
+        mock_send_message.assert_called_once()
+        assert "priority_flag" not in mock_send_message.call_args.kwargs
+
+    def test_set_priority_flag_is_false(self, mock_send_message):
+        """If set_priority_flag is False and the priority_flag is set on a
+        MTMessage object, the priority_flag param should NOT be set in the PDU.
+        """
+        client = self.get_client_and_message(set_priority_flag=False)[0]
+        client.receive_pg_notify()
+
+        mock_send_message.assert_called_once()
+        assert "priority_flag" not in mock_send_message.call_args.kwargs
+
+    def test_set_priority_flag_is_false_but_priority_in_submit_sm_params(
+        self, mock_send_message
+    ):
+        """If set_priority_flag is False and but a priority_flag was set in the
+        submit_sm_params dictionary, the priority_flag from submit_sm_params
+        should still be set in the PDU.
+        """
+        priority = MTMessage.PriorityFlag.LEVEL_0
+        client, message = self.get_client_and_message(
+            {"priority_flag": priority}, False
+        )
+        client.receive_pg_notify()
+
+        mock_send_message.assert_called_once()
+        assert mock_send_message.call_args.kwargs["priority_flag"] == priority
+
+
+@pytest.mark.django_db(transaction=True)
 def test_mt_messages_per_second_adjustment_on_timeout():
     """Tests that the sending rate is automatically reduced if a timeout is
     encountered when the client is sending a message.
@@ -176,6 +275,7 @@ def test_mt_messages_per_second_adjustment_on_timeout():
         "notify_mo_channel",
         backend,
         {},  # submit_sm_params
+        False,  # set_priority_flag
         2,  # mt_messages_per_second
         "",  # hc_check_uuid
         "",  # hc_ping_key
