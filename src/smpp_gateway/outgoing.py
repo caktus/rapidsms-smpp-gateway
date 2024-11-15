@@ -1,10 +1,10 @@
 import logging
 
-# from django.db import connection
 from django.utils import timezone
 from rapidsms.backends.base import BackendBase
 
 from smpp_gateway.models import MTMessage
+from smpp_gateway.queries import pg_notify
 from smpp_gateway.utils import grouper
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,5 @@ class SMPPGatewayBackend(BackendBase):
             MTMessage.objects.bulk_create(
                 [MTMessage(**kwargs) for kwargs in kwargs_group]
             )
-            # FIXME: Re-enable when we have a way to avoid notifies on bulk SMS
-            # with connection.cursor() as curs:
-            #     curs.execute(f"NOTIFY {self.model.name}")
+            if context.get("priority_flag", 0) >= MTMessage.PriorityFlag.LEVEL_2.value:
+                pg_notify(self.model.name)
