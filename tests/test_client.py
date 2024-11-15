@@ -26,6 +26,7 @@ class TestMessageReceivedHandler:
             {},  # submit_sm_params
             False,  # set_priority_flag
             20,  # mt_messages_per_second
+            30,  # socket_timeout
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -63,6 +64,7 @@ class TestMessageReceivedHandler:
             {},  # submit_sm_params
             False,  # set_priority_flag
             20,  # mt_messages_per_second
+            30,  # socket_timeout
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -106,6 +108,7 @@ class TestMessageReceivedHandler:
             {},  # submit_sm_params
             False,  # set_priority_flag
             20,  # mt_messages_per_second
+            30,  # socket_timeout
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug
@@ -145,6 +148,7 @@ def test_message_sent_handler():
         {},  # submit_sm_params
         False,  # set_priority_flag
         20,  # mt_messages_per_second
+        30,  # socket_timeout
         "",  # hc_check_uuid
         "",  # hc_ping_key
         "",  # hc_check_slug
@@ -183,6 +187,7 @@ class TestSetPriorityFlag:
             submit_sm_params or {},
             set_priority_flag,
             20,  # mt_messages_per_second
+            30,  # socket_timeout
             "",  # hc_check_uuid
             "",  # hc_ping_key
             "",  # hc_check_slug

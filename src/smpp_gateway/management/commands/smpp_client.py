@@ -58,6 +58,11 @@ class Command(BaseCommand):
             default=os.environ.get("SMPPLIB_MT_MESSAGES_PER_SECOND", 20),
         )
         parser.add_argument(
+            "--socket-timeout",
+            type=int,
+            default=os.environ.get("SMPPLIB_SOCKET_TIMEOUT", 5),
+        )
+        parser.add_argument(
             "--database-url",
             default=os.environ.get("DATABASE_URL"),
         )

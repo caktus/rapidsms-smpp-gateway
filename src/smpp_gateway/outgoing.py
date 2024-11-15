@@ -1,6 +1,6 @@
 import logging
 
-from django.db import connection
+# from django.db import connection
 from django.utils import timezone
 from rapidsms.backends.base import BackendBase
 
@@ -48,5 +48,6 @@ class SMPPGatewayBackend(BackendBase):
             MTMessage.objects.bulk_create(
                 [MTMessage(**kwargs) for kwargs in kwargs_group]
             )
-            with connection.cursor() as curs:
-                curs.execute(f"NOTIFY {self.model.name}")
+            # FIXME: Re-enable when we have a way to avoid notifies on bulk SMS
+            # with connection.cursor() as curs:
+            #     curs.execute(f"NOTIFY {self.model.name}")

@@ -20,6 +20,7 @@ def get_smpplib_client(
     submit_sm_params: dict,
     set_priority_flag: bool,
     mt_messages_per_second: int,
+    socket_timeout: int,
     hc_check_uuid: str,
     hc_ping_key: str,
     hc_check_slug: str,
@@ -38,10 +39,12 @@ def get_smpplib_client(
         submit_sm_params,
         set_priority_flag,
         mt_messages_per_second,
+        # Pass-through arguments to smpplib.client.Client:
         host,
         port,
         allow_unknown_opt_params=True,
         sequence_generator=sequence_generator,
+        timeout=socket_timeout,
     )
     return client
 
@@ -73,6 +76,7 @@ def start_smpp_client(options):
         json.loads(options["submit_sm_params"]),
         options["set_priority_flag"],
         options["mt_messages_per_second"],
+        options["socket_timeout"],
         options["hc_check_uuid"],
         options["hc_ping_key"],
         options["hc_check_slug"],
