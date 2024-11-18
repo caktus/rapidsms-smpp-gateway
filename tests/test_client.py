@@ -275,7 +275,7 @@ def test_mt_messages_per_second_adjustment_on_timeout():
         backend,
         {},  # submit_sm_params
         False,  # set_priority_flag
-        2,  # mt_messages_per_second
+        10,  # mt_messages_per_second
         "",  # hc_check_uuid
         "",  # hc_ping_key
         "",  # hc_check_slug
@@ -291,23 +291,28 @@ def test_mt_messages_per_second_adjustment_on_timeout():
     client.state = smpplib_consts.SMPP_CLIENT_STATE_BOUND_TX
 
     # In case of a TimeoutError, the exception should be caught and
-    # client.mt_messages_per_second should be adjusted from 2 to 1
+    # client.mt_messages_per_second should be adjusted from 10 to 7 (reduced by 0.25)
     with timeout_patcher as mock_socket_send:
         client.send_mt_messages()
         mock_socket_send.assert_called()
-        assert client.mt_messages_per_second == 1
+        assert client.mt_messages_per_second == 7
         assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 0
+
+    MTMessageFactory.create_batch(20, status=MTMessage.Status.NEW, backend=backend)
 
     # No timeout. client.mt_messages_per_second should not be adjusted further
     with mock.patch.object(client, "send_pdu", return_value=True) as mock_send_pdu:
         client.send_mt_messages()
         mock_send_pdu.assert_called()
-        assert client.mt_messages_per_second == 1
-        # Should have sent 5 messages (client.mt_messages_per_second * client.timeout)
-        assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 5
+        assert client.mt_messages_per_second == 7
+        # Should have sent all 20 messages
+        assert MTMessage.objects.filter(status=MTMessage.Status.SENT).count() == 20
 
-    # Another timeout occurs, but client.mt_messages_per_second cannot be reduced
-    # further
+    MTMessageFactory.create_batch(20, status=MTMessage.Status.NEW, backend=backend)
+    client.mt_messages_per_second = 1
+
+    # Timeouts occur again, but client.mt_messages_per_second cannot be reduced
+    # further because it is 1
     with timeout_patcher as mock_socket_send:
         client.send_mt_messages()
         mock_socket_send.assert_called()
