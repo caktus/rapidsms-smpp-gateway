@@ -102,6 +102,7 @@ class MTMessage(AbstractTimestampModel, models.Model):
     priority_flag = models.IntegerField(
         _("priority flag"), choices=PriorityFlag.choices, null=True
     )
+    error = models.TextField(_("error"), blank=True)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

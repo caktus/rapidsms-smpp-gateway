@@ -184,7 +184,8 @@ class PgSmppClient(smpplib.client.Client):
             return
         logger.info(f"Found {len(smses)} messages to send in {self.timeout} seconds")
         submit_sm_resps = []
-        update_statuses = defaultdict(list)
+        errors = defaultdict(list)
+        sent = []
         adjusted_sending_rate = False
         for sms in smses:
             params = {**self.submit_sm_params, **sms["params"]}
@@ -193,7 +194,7 @@ class PgSmppClient(smpplib.client.Client):
             try:
                 pdus = self.split_and_send_message(sms["short_message"], **params)
             except Exception as e:
-                update_status_to = MTMessage.Status.ERROR
+                errors[str(e)].append(sms["id"])
                 logger.exception(
                     f"An error occurred when sending message ID {sms['id']}."
                 )
@@ -210,7 +211,7 @@ class PgSmppClient(smpplib.client.Client):
                         e, sms
                     )
             else:
-                update_status_to = MTMessage.Status.SENT
+                sent.append(sms["id"])
                 # Create placeholder MTMessageStatus objects in the DB, which
                 # the message_sent handler will later update with the actual command_status
                 # and message_id (and eventually maybe a delivery report).
@@ -227,14 +228,18 @@ class PgSmppClient(smpplib.client.Client):
                         for pdu in pdus
                     ]
                 )
-            update_statuses[update_status_to].append(sms["id"])
-        for status, pks in update_statuses.items():
-            logger.info(f"Updating {len(pks)} messages to {status.name} status")
+        for error, pks in errors.items():
+            logger.info(f"Updating {len(pks)} messages to ERROR status: {error}")
             MTMessage.objects.filter(pk__in=pks).update(
-                status=status,
+                status=MTMessage.Status.ERROR,
+                modify_time=timezone.now(),
+                error=error,
+            )
+        if sent:
+            MTMessage.objects.filter(pk__in=sent).update(
+                status=MTMessage.Status.SENT,
                 modify_time=timezone.now(),
             )
-        if submit_sm_resps:
             MTMessageStatus.objects.bulk_create(submit_sm_resps)
 
     def get_new_mt_messages_per_second(self):

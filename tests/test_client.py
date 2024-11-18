@@ -337,11 +337,12 @@ def test_messages_not_left_in_sending_status_on_exceptions():
     )
     side_effect = []
     expected_sent = set()
-    expected_error = set()
+    expected_error = {f"error {i}": set() for i in range(2)}
     for index, message in enumerate(messages):
-        if index in (2, 4, 6, 9):
-            side_effect.append(Exception(f"error {index}"))
-            expected_error.add(message.id)
+        if index in (2, 4, 6, 9, 13, 17):
+            error = f"error {index % 2}"
+            side_effect.append(Exception(error))
+            expected_error[error].add(message.id)
         else:
             side_effect.append([mock.Mock(sequence=index)])
             expected_sent.add(message.id)
@@ -352,9 +353,21 @@ def test_messages_not_left_in_sending_status_on_exceptions():
         client.send_mt_messages()
 
     assert mock_split_and_send_message.call_count == 20
+
+    # Ensure there are no messages remaining with "sending" status
     assert not MTMessage.objects.filter(status=MTMessage.Status.SENDING).exists()
+
     qs = MTMessage.objects.values_list("id", flat=True)
-    assert expected_error == set(qs.filter(status=MTMessage.Status.ERROR))
+
+    # Ensure that the messages where an error was encountered are updated to "error"
+    # status and a string representation of the error is saved in the error field
+    for error, expected_pks in expected_error.items():
+        assert expected_pks == set(
+            qs.filter(status=MTMessage.Status.ERROR, error=error)
+        )
+
+    # Ensure the messages that are successfully sent have their status updated
+    # to "sent" and MTMessageStatus objects are created for them
     assert expected_sent == set(qs.filter(status=MTMessage.Status.SENT))
     assert expected_sent == set(
         MTMessageStatus.objects.values_list("mt_message", flat=True)
