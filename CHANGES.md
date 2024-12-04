@@ -1,5 +1,9 @@
 # Changes
 
+## 1.4.1 (December 4, 2024)
+
+- Increase timeout and disable Postgres notify on send (#27)
+
 ## 1.4.0 (November 14, 2024)
 
 - Send high priority transactional messages before bulk messages (#25)
