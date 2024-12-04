@@ -1,6 +1,10 @@
+from unittest.mock import patch
+
+from django.conf import settings
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from smpp_gateway.models import MTMessage
 from smpp_gateway.router import PriorityBlockingRouter
 
 from .factories import ConnectionFactory
@@ -15,7 +19,9 @@ from .factories import ConnectionFactory
 )
 class PriorityBlockingRouterTest(TestCase):
     def setUp(self):
-        self.router = PriorityBlockingRouter(apps=[], backends={})
+        self.router = PriorityBlockingRouter(
+            apps=[], backends=settings.INSTALLED_BACKENDS
+        )
         self.connection = ConnectionFactory()
 
     def test_new_incoming_message(self):
@@ -70,3 +76,43 @@ class PriorityBlockingRouterTest(TestCase):
         )
         context = msg.extra_backend_context()
         self.assertEqual(context["priority_flag"], msg.default_priority_flag.value)
+
+    def test_no_postgres_notification_for_low_priority_messages(self):
+        """Tests that a Postgres NOTIFY is not done for messages where the
+        priority_flag is less than 2.
+        """
+        for priority in MTMessage.PriorityFlag.values[:2]:
+            msg = self.router.new_outgoing_message(
+                text="foo",
+                connections=[self.connection],
+                fields={"priority_flag": priority},
+            )
+            with patch("smpp_gateway.outgoing.pg_notify") as mock_pg_notify:
+                self.router.send_to_backend(
+                    backend_name="smppsim",
+                    id_=msg.id,
+                    text=msg.text,
+                    identities=[self.connection.identity],
+                    context=msg.fields,
+                )
+                mock_pg_notify.assert_not_called()
+
+    def test_postgres_notification_for_high_priority_messages(self):
+        """Tests that a Postgres NOTIFY is done for messages where the
+        priority_flag is at least 2.
+        """
+        for priority in MTMessage.PriorityFlag.values[2:]:
+            msg = self.router.new_outgoing_message(
+                text="foo",
+                connections=[self.connection],
+                fields={"priority_flag": priority},
+            )
+            with patch("smpp_gateway.outgoing.pg_notify") as mock_pg_notify:
+                self.router.send_to_backend(
+                    backend_name="smppsim",
+                    id_=msg.id,
+                    text=msg.text,
+                    identities=[self.connection.identity],
+                    context=msg.fields,
+                )
+                mock_pg_notify.assert_called_with("smppsim")

@@ -58,6 +58,19 @@ class Command(BaseCommand):
             default=os.environ.get("SMPPLIB_MT_MESSAGES_PER_SECOND", 20),
         )
         parser.add_argument(
+            "--socket-timeout",
+            type=int,
+            default=os.environ.get("SMPPLIB_SOCKET_TIMEOUT", 30),
+        )
+        parser.add_argument(
+            "--event-loop-timeout",
+            type=int,
+            default=os.environ.get("SMPPLIB_EVENT_LOOP_TIMEOUT", 5),
+            help="Timeout for listening for Postgres notifications and new "
+            "incoming messages. This is also the time between enquire_link "
+            "PDUs sent to the SMPP server when there is no other traffic.",
+        )
+        parser.add_argument(
             "--database-url",
             default=os.environ.get("DATABASE_URL"),
         )
