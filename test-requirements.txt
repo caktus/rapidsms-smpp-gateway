@@ -1,6 +1,6 @@
 pytest==7.4.2
-pytest-django==4.5.2
-factory-boy==3.2.1
+pytest-django==4.11.1
+factory-boy==3.3.3
 
 # Remove max version of 2.2.3 when https://github.com/python-smpplib/python-smpplib/pull/221 has been merged and released
 smpplib<2.2.3
