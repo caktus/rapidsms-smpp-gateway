@@ -1,5 +1,9 @@
 # Changes
 
+## 1.4.2 (May 22, 2025)
+
+- Add support for Django 5.2 (#28)
+
 ## 1.4.1 (December 4, 2024)
 
 - Increase timeout and disable Postgres notify on send (#27)
